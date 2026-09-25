@@ -1,0 +1,7 @@
+packages:
+  - '.'
+  - 'e2e/suite'
+  - 'e2e/app'
+allowBuilds:
+  esbuild: true
+  isolated-vm: false

@@ -1,0 +1,54 @@
+{
+	"name": "@puruvj/builder-sdk-svelte",
+	"version": "0.0.0",
+	"description": "A hot-path-proof, scale-proof Builder.io renderer for Svelte 5 — a drop-in for @builder.io/sdk-svelte",
+	"license": "MIT",
+	"author": "Puru Vijayvargia",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/PuruVJ/builder-sdk-svelte.git"
+	},
+	"keywords": ["builder.io", "svelte", "sveltekit", "cms", "ssr", "performance"],
+	"type": "module",
+	"svelte": "./src/lib/index.ts",
+	"exports": {
+		".": {
+			"types": "./src/lib/index.ts",
+			"svelte": "./src/lib/index.ts",
+			"default": "./src/lib/index.ts"
+		}
+	},
+	"scripts": {
+		"fixtures": "node scripts/gen-fixtures.mjs",
+		"pretest": "pnpm fixtures && pnpm bench:build",
+		"test": "vitest run",
+		"bench:build": "vite build --config bench/vite.ssr.config.ts",
+		"bench:ssr": "node bench/ssr.mjs",
+		"bench:app": "node --expose-gc bench/app-page.mjs",
+		"bench:client": "node bench/client.mjs",
+		"e2e:build": "pnpm --filter ./e2e/app build:official && pnpm --filter ./e2e/app build:ours",
+		"e2e:official": "cd e2e/suite && SERVER_NAME=sveltekit BUILDER_SDK=official TEST_TYPE=e2e playwright test",
+		"e2e:ours": "cd e2e/suite && SERVER_NAME=sveltekit BUILDER_SDK=ours TEST_TYPE=e2e playwright test"
+	},
+	"peerDependencies": {
+		"@builder.io/sdk-svelte": "^5.2.0",
+		"svelte": "^5.30.0"
+	},
+	"peerDependenciesMeta": {
+		"@builder.io/sdk-svelte": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@builder.io/sdk-svelte": "5.2.0",
+		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@types/node": "^22.20.4",
+		"parse5": "^8.0.1",
+		"playwright": "^1.62.1",
+		"svelte": "^5.56.8",
+		"tinybench": "^6.2.0",
+		"typescript": "^7.0.2",
+		"vite": "^7.3.6",
+		"vitest": "^3.2.7"
+	}
+}

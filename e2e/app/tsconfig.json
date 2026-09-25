@@ -1,0 +1,3 @@
+{
+  "compilerOptions": { "allowJs": true, "esModuleInterop": true, "skipLibCheck": true, "strict": false, "module": "esnext", "moduleResolution": "bundler", "target": "esnext", "verbatimModuleSyntax": true }
+}

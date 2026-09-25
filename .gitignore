@@ -1,0 +1,19 @@
+node_modules/
+.DS_Store
+
+# build + bench outputs
+bench/dist/
+bench/results/
+e2e/app/build-*/
+e2e/app/.svelte-kit*/
+e2e/suite/dist/
+e2e/suite/test-results/
+e2e/suite/playwright-report/
+
+# generated fixtures (deterministic: `pnpm fixtures`)
+fixtures/gen/
+fixtures/pages/
+
+# captured pages from a real site stay LOCAL (scripts/grab-real.mjs)
+fixtures/real/
+fixtures/probe/

@@ -1,0 +1,25 @@
+{
+  "name": "@sdk/tests",
+  "description": "Workspace containing e2e tests for SDKs",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test:e2e": "TEST_TYPE=e2e playwright test"
+  },
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/traverse": "^0.6.32",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "traverse": "^0.6.7",
+    "zod": "^3.20.2"
+  }
+}
