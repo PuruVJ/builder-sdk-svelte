@@ -3,6 +3,8 @@ node_modules/
 
 # build + bench outputs
 dist/
+.svelte-kit/
+.svelte-dts/
 bench/dist/
 bench/results/
 e2e/app/build-*/
