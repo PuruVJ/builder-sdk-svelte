@@ -162,59 +162,98 @@ function has_variations(obj: Record<string, unknown>): boolean {
 /**
  * Every Element reachable from `root`, in document order along block lists; owners of localized
  * values into `localized`; page flags into `flags`. Null when the visit budget runs out (a cycle).
- * Two parallel stacks: the value, and the block whose `component.options` it sits in (localized
- * values belong to that block; a nested block owns its own).
+ * Parallel stacks: the value; the block whose `component.options` it sits in (localized values
+ * belong to that block; a nested block owns its own); and whether it is an item of a block list.
+ *
+ * Content data comes in hundreds of object shapes, so reading `obj['@type']` / `obj.variations` on
+ * every object is a megamorphic load each. Instead each ARRAY is classified once by its first item:
+ * the items of a block list read `@type` directly (all Elements, one shape family); every other
+ * object is recognised from its own keys while they are iterated anyway (`@type`, `variations`),
+ * and an Element met that way drops what its loop had pushed and is walked as a block.
  */
 function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: Flags, budget: number): BuilderBlock[] | null {
 	const found: BuilderBlock[] = [];
 	const values: object[] = [root];
 	const owners: Array<BuilderBlock | null> = [null];
+	const listed: boolean[] = [false];
 	while (values.length) {
 		if (--budget === 0) return null;
 		const value = values.pop()!;
 		const owner = owners.pop()!;
+		const in_block_list = listed.pop()!;
 		if (Array.isArray(value)) {
+			const first = value[0];
+			const block_list = typeof first === 'object' && first !== null && first['@type'] === ELEMENT_TYPE;
 			for (let i = value.length - 1; i >= 0; i--) {
 				const v = value[i];
 				if (typeof v === 'object' && v !== null) {
 					values.push(v);
 					owners.push(owner);
+					listed.push(block_list);
 				}
 			}
 			continue;
 		}
 		const obj = value as Record<string, unknown>;
-		const type = obj['@type'];
-		if (type === ELEMENT_TYPE) {
-			const block = obj as BuilderBlock;
-			found.push(block);
-			const component = block.component;
-			// visited after this block: children, then component options, then block options
-			if (block.options) {
-				values.push(block.options);
-				owners.push(null);
+		let is_block = false;
+		if (in_block_list) {
+			const type = obj['@type'];
+			if (type === ELEMENT_TYPE) is_block = true;
+			else {
+				if (type === LOCALIZED_TYPE && owner) localized.add(owner);
+				if (!flags.ab && has_variations(obj)) flags.ab = true;
+				for (const key in obj) {
+					const v = obj[key];
+					if (typeof v === 'object' && v !== null) {
+						values.push(v);
+						owners.push(owner);
+						listed.push(false);
+					}
+				}
+				continue;
 			}
-			if (component) {
-				if (component.name === 'PersonalizationContainer') flags.personalization = true;
-				if (component.options) {
-					values.push(component.options);
-					owners.push(block);
+		} else {
+			const mark = values.length;
+			for (const key in obj) {
+				const v = obj[key];
+				if (typeof v === 'object') {
+					if (v === null) continue;
+					values.push(v);
+					owners.push(owner);
+					listed.push(false);
+					if (key === 'variations' && !flags.ab && obj.data) for (const _ in v) { flags.ab = true; break; }
+				} else if (key === '@type') {
+					if (v === ELEMENT_TYPE) {
+						is_block = true;
+						break;
+					}
+					if (v === LOCALIZED_TYPE && owner) localized.add(owner);
 				}
 			}
-			if (block.children) {
-				values.push(block.children);
-				owners.push(null);
-			}
-			continue;
+			if (is_block) values.length = owners.length = listed.length = mark;
 		}
-		if (type === LOCALIZED_TYPE && owner) localized.add(owner);
-		if (!flags.ab && has_variations(obj)) flags.ab = true;
-		for (const key in obj) {
-			const v = obj[key];
-			if (typeof v === 'object' && v !== null) {
-				values.push(v);
-				owners.push(owner);
+		if (!is_block) continue;
+		const block = obj as BuilderBlock;
+		found.push(block);
+		const component = block.component;
+		// visited after this block: children, then component options, then block options
+		if (block.options) {
+			values.push(block.options);
+			owners.push(null);
+			listed.push(false);
+		}
+		if (component) {
+			if (component.name === 'PersonalizationContainer') flags.personalization = true;
+			if (component.options) {
+				values.push(component.options);
+				owners.push(block);
+				listed.push(false);
 			}
+		}
+		if (block.children) {
+			values.push(block.children);
+			owners.push(null);
+			listed.push(false);
 		}
 	}
 	return found;

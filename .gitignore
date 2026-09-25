@@ -20,3 +20,6 @@ fixtures/pages/
 # captured pages from a real site stay LOCAL (scripts/grab-real.mjs)
 fixtures/real/
 fixtures/probe/
+
+# profiles
+bench/prof/

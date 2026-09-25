@@ -6,7 +6,7 @@ request, rendered on every request.
 
 It keeps the official SDK's public API and markup. It passes the official SDK's own end-to-end
 suite: 10 more tests pass than with the official SDK, and no test that passes there fails here.
-Server rendering is **60–110× faster** on production-shaped pages, with **~99% less memory
+Server rendering is **170–300× faster** on production-shaped pages, with **~99.9% less memory
 churn**. In the browser, hydration is **3–6× faster** with no main-thread blocking.
 
 > **Status: experimental.** Built against `@builder.io/sdk-svelte@5.2.0` and Svelte 5. Visual
@@ -53,27 +53,35 @@ Four `<Content>` roots per request (body, footer, accessibility toggle, support 
 
 | Page (JSON in) | Official p50 | Ours p50 | Speedup | Allocated / request | GC |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| landing-small (129 KB) | 15.0 ms | 0.19 ms | **78×** | 90 MB → 0.40 MB | 0.42 → 0 ms |
-| landing (280 KB) | 27.2 ms | 0.35 ms | **79×** | 182 MB → 0.67 MB | 0.64 → 0 ms |
-| landing-large (519 KB) | 45.8 ms | 0.61 ms | **75×** | 321 MB → 1.2 MB | 0.82 → 0 ms |
+| landing-small (129 KB) | 15.4 ms | 0.079 ms | **194×** | 90 MB → 0.21 MB | 0.39 → 0 ms |
+| landing (280 KB) | 27.9 ms | 0.124 ms | **225×** | 182 MB → 0.29 MB | 0.56 → 0 ms |
+| landing-large (519 KB) | 46.6 ms | 0.190 ms | **245×** | 321 MB → 0.45 MB | 0.78 → 0 ms |
+
+On pages captured from a production site (kept local, see
+[Testing with your own pages](#testing-with-your-own-pages)) the same whole-page render is
+**122–294×** faster: 12–50 ms → 0.08–0.17 ms.
 
 ### Server: one `<Content>`, every scale
 
 | Fixture | JSON | Official p50 | Ours p50 | Speedup | Official p99 | Ours p99 | Allocated / render | Cold first render |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| page-50k | 61 KB | 5.6 ms | 0.09 ms | 63× | 6.8 ms | 0.24 ms | 35 MB → 0.16 MB | 16 → 3 ms |
-| page-250k | 267 KB | 23.4 ms | 0.32 ms | 72× | 26.2 ms | 1.98 ms | 158 MB → 0.54 MB | 37 → 5 ms |
-| page-500k | 525 KB | 47.9 ms | 0.61 ms | 79× | 49.3 ms | 2.35 ms | 311 MB → 0.94 MB | 56 → 5 ms |
-| page-1m | 983 KB | 85.4 ms | 1.18 ms | 73× | 89.0 ms | 2.87 ms | 582 MB → 2.0 MB | 93 → 6 ms |
-| page-2m | 1.9 MB | 163 ms | 2.2 ms | 74× | 169 ms | 4.2 ms | 1.15 GB → 3.4 MB | 173 → 9 ms |
-| page-4m | 3.9 MB | 308 ms | 4.6 ms | 67× | 312 ms | 7.2 ms | 2.3 GB → 7.2 MB | 330 → 13 ms |
-| wide options (12 blocks) | 1.5 MB | 120 ms | 1.2 ms | 97× | 122 ms | 2.6 ms | 896 MB → 2.0 MB | 127 → 6 ms |
-| flat, 1,000 blocks | 362 KB | 28.5 ms | 1.2 ms | 25× | 36.5 ms | 4.1 ms | 141 MB → 6.8 MB | 39 → 7 ms |
-| flat, 5,000 blocks | 1.8 MB | 130 ms | 7.6 ms | 17× | 150 ms | 55 ms | 701 MB → 33 MB | 131 → 16 ms |
-| 200 levels deep | 90 KB | 36.2 ms | 0.32 ms | 112× | 40.2 ms | 4.2 ms | 41 MB → 1.3 MB | 48 → 3 ms |
+| page-50k | 61 KB | 5.3 ms | 0.031 ms | 172× | 6.7 ms | 0.06 ms | 35 MB → 0.08 MB | 15 → 2.8 ms |
+| page-250k | 267 KB | 23.0 ms | 0.087 ms | 264× | 25.4 ms | 0.16 ms | 158 MB → 0.17 MB | 35 → 3.2 ms |
+| page-500k | 525 KB | 44.4 ms | 0.160 ms | 278× | 47.3 ms | 1.70 ms | 310 MB → 0.28 MB | 56 → 3.7 ms |
+| page-1m | 983 KB | 83.5 ms | 0.311 ms | 268× | 86.3 ms | 2.07 ms | 582 MB → 0.58 MB | 93 → 4.4 ms |
+| page-2m | 1.9 MB | 164 ms | 0.553 ms | 296× | 169 ms | 2.47 ms | 1.15 GB → 0.95 MB | 171 → 5.4 ms |
+| page-4m | 3.9 MB | 311 ms | 1.169 ms | 266× | 317 ms | 3.46 ms | 2.3 GB → 1.9 MB | 332 → 6.1 ms |
+| wide options (12 blocks) | 1.5 MB | 120 ms | 0.215 ms | 557× | 126 ms | 0.39 ms | 896 MB → 0.15 MB | 124 → 3.1 ms |
+| flat, 1,000 blocks | 362 KB | 27.4 ms | 0.416 ms | 66× | 34.8 ms | 3.65 ms | 141 MB → 2.8 MB | 36 → 4.1 ms |
+| flat, 5,000 blocks | 1.8 MB | 133 ms | 5.1 ms | 26× | 150 ms | 7.4 ms | 701 MB → 14 MB | 133 → 9.3 ms |
+| 200 levels deep | 90 KB | 34.1 ms | 0.177 ms | 193× | 38.3 ms | 3.94 ms | 41 MB → 0.9 MB | 44 → 2.7 ms |
 
 Rendering the **same** content object again (an app that caches its fetch) is cheaper still, because
-every block's compiled record is reused.
+every block's compiled record is reused: a whole captured production page then costs 0.092 ms,
+against 37.8 ms for the official SDK.
+
+For most pages the SDK is now cheaper than the `JSON.parse` of the content the app fetched (a 330
+KB page parses in ~0.5 ms and renders in ~0.14 ms).
 
 Server HTML is also 25–60% smaller: one stylesheet instead of a `<style>` per block, the A/B and
 personalization scripts only when the content uses them, and no hydration markers inside plain
@@ -86,23 +94,25 @@ Chromium via Playwright, median of 5 cold loads. "Hydrated" is `performance.now(
 
 | Page | CPU | Official hydrated | Ours hydrated | Official TBT | Ours TBT | JS heap |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| landing (248 KB) | 1× | 89 ms | 26 ms | 1 ms | 0 ms | 3.6 → 2.4 MB |
-| landing (248 KB) | 4× slower | 280 ms | 89 ms | 149 ms | **0 ms** | |
-| page-1m | 1× | 275 ms | 53 ms | 96 ms | 0 ms | 6.5 → 3.3 MB |
-| page-1m | 4× slower | 771 ms | 157 ms | 537 ms | **0 ms** | |
-| page-2m | 1× | 481 ms | 81 ms | 206 ms | 0 ms | 8.7 → 4.2 MB |
-| page-2m | 4× slower | 1,366 ms | 222 ms | 963 ms | **0 ms** | |
-| flat, 1,000 blocks | 4× slower | 661 ms | 183 ms | 413 ms | 22 ms | 50 → 5.8 MB |
+| landing (248 KB) | 1× | 87 ms | 24 ms | 0 ms | 0 ms | 3.6 → 2.4 MB |
+| landing (248 KB) | 4× slower | 257 ms | 82 ms | 135 ms | **0 ms** | |
+| page-1m | 1× | 257 ms | 51 ms | 86 ms | 0 ms | 6.5 → 3.3 MB |
+| page-1m | 4× slower | 722 ms | 140 ms | 488 ms | **0 ms** | |
+| page-2m | 1× | 470 ms | 76 ms | 197 ms | 0 ms | 8.7 → 4.2 MB |
+| page-2m | 4× slower | 1,317 ms | 205 ms | 922 ms | **0 ms** | |
+| flat, 1,000 blocks | 4× slower | 637 ms | 165 ms | 396 ms | 8 ms | 50 → 3.6 MB |
 
-The SDK's client JavaScript is ~9.5 KB smaller over the wire (75.0 → 65.5 KB for the whole test
-page).
+The SDK's client chunk is 29 KB over the wire (brotli), against 37.6 KB for the official SDK. On the
+landing page the SDK's own code is ~5 ms of the page's 64 ms of main-thread work at 4× slowdown; the
+rest is the browser and SvelteKit.
 
 ### Depth
 
 | Nesting | Official | Ours |
 | --- | --- | --- |
 | Server render | fails below 400 levels | 20,000+ levels (no recursion in the plain path) |
-| Browser hydration | stack overflow at ~55 levels | 700+ levels (beyond that, SvelteKit's own page-data serializer gives out first) |
+| Browser hydration, plain blocks | stack overflow at ~55 levels | 700+ levels (beyond that, SvelteKit's own page-data serializer gives out first) |
+| Browser hydration, live blocks (bindings at every level) | stack overflow below 60 levels | 150+ levels |
 
 ## Usage
 
@@ -158,19 +168,24 @@ actions. Localized values are resolved once per block. The walk stops at nested 
 write only the objects it changes. Code strings are compiled once per process and cached. Bindings
 apply through a copy-on-write path, never a whole-subtree clone. Every regex is hoisted.
 
-**One stylesheet.** One iterative walk per content finds every reachable block, including blocks
-nested in component options, and collects their responsive CSS into a single `<style>`.
+**One walk over the content.** This is the only pass over the whole content's data. It uses an
+explicit stack, so any depth works, and it does no per-object bookkeeping. It finds every reachable
+block, including blocks nested in component options, and notes which blocks own localized values;
+the rest skip that walk entirely. It also collects every static block's responsive CSS into a single
+`<style>`.
 
-**One component per block, with no reactive state unless the block needs it.** A static block reads
-its compiled record once. Only blocks with bindings (`Bound`) or a repeat (`Repeat`) get reactive
-state. A block picks its shape with a single dynamic `{@render}` rather than an if/else chain, so
-nesting doesn't pile up effects.
+**No component for a static block.** A static block (no bindings, repeat or animations, which is
+nearly all of them) renders through a snippet and reads its compiled record once. Only blocks with
+behaviour are component instances: bindings (`Bound`) and repeats (`Repeat`) get reactive state,
+animations get a mount hook. A block picks its shape with a single dynamic `{@render}` rather than
+an if/else chain, so nesting doesn't pile up effects.
 
 **Plain subtrees are strings.** A subtree with no behaviour anywhere in it (no custom component, no
 bindings, repeat, actions, animations or `{{state}}` text) renders as one `{@html}` string built by a
 loop. Svelte never walks into it during hydration, since there is nothing live inside to find. It
-costs no component, effect or hydration marker per block. The string follows Svelte's own SSR
-attribute rules, and a test checks it **byte for byte** against the live path on every fixture.
+costs no component, effect or hydration marker per block. A list's consecutive plain blocks are one
+string too. The string follows Svelte's own SSR attribute rules, and a test checks it **byte for
+byte** against the live path on every fixture.
 
 ## Compatibility
 
