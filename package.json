@@ -1,6 +1,6 @@
 {
 	"name": "@puruvj/builder-sdk-svelte",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"description": "A hot-path-proof, scale-proof Builder.io renderer for Svelte 5 — a drop-in for @builder.io/sdk-svelte",
 	"license": "MIT",
 	"author": "Puru Vijayvargia",
@@ -34,7 +34,7 @@
 		"**/*.css"
 	],
 	"scripts": {
-		"build": "tsdown && node scripts/check-dist-svelte.mjs",
+		"build": "tsdown && node scripts/check-dist-svelte.mjs && node scripts/check-dist-bundle.mjs",
 		"prepublishOnly": "pnpm build",
 		"fixtures": "node scripts/gen-fixtures.mjs",
 		"pretest": "pnpm fixtures && pnpm bench:build",

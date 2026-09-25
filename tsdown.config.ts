@@ -1,13 +1,38 @@
 import { cpSync, existsSync, globSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { preprocess, type PreprocessorGroup } from 'svelte/compiler';
 import { emitDts } from 'svelte2tsx';
 import { defineConfig } from 'tsdown';
+import ts from 'typescript';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const LANG_TS_RE = /(<script\b[^>]*?)\s+lang=(["'])ts\2/g;
+
+/**
+ * Strip TypeScript from a component's `<script>`s with TypeScript itself, VERBATIM: every import and
+ * export not marked `type` is kept as written. A component script is only half the module — the
+ * template uses imports the script never mentions, and `export { view }` in a module script names a
+ * template SNIPPET the script cannot see. esbuild (vitePreprocess) elides that export as "probably a
+ * type": 0.0.3 shipped `export {}` and every consumer's `import { view }` broke.
+ * (scripts/check-dist-svelte.mjs now checks every import between shipped files resolves.)
+ */
+const strip_types: PreprocessorGroup = {
+	name: 'builder-sdk-svelte:strip-types',
+	script({ content, attributes, filename }) {
+		if (attributes.lang !== 'ts') return;
+		const { outputText } = ts.transpileModule(content, {
+			fileName: filename,
+			compilerOptions: {
+				target: ts.ScriptTarget.ESNext,
+				module: ts.ModuleKind.ESNext,
+				verbatimModuleSyntax: true,
+				useDefineForClassFields: true
+			}
+		});
+		return { code: outputText };
+	}
+};
 
 /**
  * `.svelte` components ship as SOURCE at their parallel paths (the consumer's vite-plugin-svelte
@@ -53,7 +78,7 @@ export default defineConfig({
 	dts: true,
 	clean: true,
 	treeshake: false, // every module is kept intact; the consumer's bundler tree-shakes
-	plugins: [svelte_source(vitePreprocess({ script: true }))],
+	plugins: [svelte_source(strip_types)],
 	deps: {
 		neverBundle: ['svelte', /^svelte\//, /^@builder\.io\/sdk-svelte(\/|$)/, /\.svelte$/]
 	}
