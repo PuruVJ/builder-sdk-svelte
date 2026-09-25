@@ -7,6 +7,7 @@
  * list in a module constant), and the editor-facing serialized infos are never built on the hot path.
  */
 import type { RegisteredComponent, RegisteredComponents } from '../types.js';
+import { default_components } from './defaults.js';
 
 export const REGISTRY_BRAND = Symbol.for('puruvj.builder.registry');
 
@@ -19,14 +20,6 @@ export interface Registry {
 }
 
 const by_list = new WeakMap<object, Registry>();
-let default_list: RegisteredComponent[] = [];
-
-/** Set by the package entry (defaults import the built-in block components). */
-export function set_default_components(list: RegisteredComponent[]): void {
-	default_list = list;
-	by_list_empty = null;
-}
-
 let by_list_empty: Registry | null = null;
 
 export function registry_for(custom: RegisteredComponent[] | RegisteredComponents | Registry | undefined | null): Registry {
@@ -44,7 +37,7 @@ export function registry_for(custom: RegisteredComponent[] | RegisteredComponent
 }
 
 function build(custom: RegisteredComponent[]): Registry {
-	return build_exact([...default_list, ...custom]);
+	return build_exact([...default_components(), ...custom]);
 }
 
 function build_exact(list: RegisteredComponent[]): Registry {

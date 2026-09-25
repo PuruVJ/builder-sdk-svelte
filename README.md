@@ -9,8 +9,12 @@ suite: 10 more tests pass than with the official SDK, and no test that passes th
 Server rendering is **60–110× faster** on production-shaped pages, with **~99% less memory
 churn**. In the browser, hydration is **3–6× faster** with no main-thread blocking.
 
-> **Status: experimental.** Built against `@builder.io/sdk-svelte@5.2.0` and Svelte 5. Not on npm
-> yet. Visual editing and preview are handed to the official SDK (see [Editor](#editor-and-preview)).
+> **Status: experimental.** Built against `@builder.io/sdk-svelte@5.2.0` and Svelte 5. Visual
+> editing and preview are handed to the official SDK (see [Editor](#editor-and-preview)).
+
+```sh
+npm install @puruvj/builder-sdk-svelte
+```
 
 ---
 
@@ -124,11 +128,8 @@ export default defineConfig({
 });
 ```
 
-Until it is published, install from GitHub:
-
-```sh
-pnpm add github:PuruVJ/builder-sdk-svelte
-```
+Keep `@builder.io/sdk-svelte` installed too if you use the Builder editor or preview: it is an
+optional peer dependency, loaded only inside the editor.
 
 ### What's exported
 

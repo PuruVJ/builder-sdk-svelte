@@ -17,8 +17,10 @@ import type { Compiled, Plan } from './compile.js';
 /** Off only in tests: the markup-parity test renders every page both ways and compares bytes. */
 export const PLAIN = { on: true };
 
-/** Built-in components whose whole output is a pure function of the compiled block (no state). */
-export const PLAIN_COMPONENTS = new WeakMap<object, (c: Compiled) => string>();
+/** On a registration entry: the component's whole output as a pure function of the compiled block
+ *  (no state). Only built-ins carry it (Text); an app entry of the same name replaces it. */
+export const PLAIN_RENDER = Symbol('plain_render');
+type PlainEntry = { [PLAIN_RENDER]?: (c: Compiled) => string };
 
 // ── Svelte's SSR attribute rules (svelte/src/internal/server `attributes` + shared `attr`) ──────
 const ATTR_ESCAPE_RE = /[&"<]/g;
@@ -94,7 +96,7 @@ function kind_of(c: Compiled, plan: Plan): number {
 	if (c.no_wrap) return component ? NONE : EMPTY;
 	if (!SIMPLE_TAG_RE.test(c.tag) || SPECIAL_TAGS.has(c.tag)) return NONE;
 	if (component) {
-		if (!PLAIN_COMPONENTS.has(component as object)) return NONE;
+		if (!(c.comp as PlainEntry)[PLAIN_RENDER]) return NONE;
 		if (c.empty_tag) return VOID;
 		return LEAF;
 	}
@@ -131,7 +133,7 @@ export function plain_html(plan: Plan, root: Compiled): string | null {
 		else {
 			const open = `<${c.tag}${attrs_html(c.attrs)}>`;
 			if (kind === VOID) html = open;
-			else if (kind === LEAF) html = open + PLAIN_COMPONENTS.get(c.comp!.component as object)!(c) + `</${c.tag}>`;
+			else if (kind === LEAF) html = open + (c.comp as PlainEntry)[PLAIN_RENDER]!(c) + `</${c.tag}>`;
 			else {
 				html = open;
 				for (const child of c.children) {

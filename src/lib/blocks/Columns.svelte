@@ -20,7 +20,7 @@
 		space?: number;
 		columns?: Column[];
 		stackColumnsAt?: 'tablet' | 'mobile' | 'never';
-		builderLinkComponent?: unknown;
+		builderLinkComponent?: any;
 		reverseColumnsWhenStacked?: boolean;
 		builderContext: Writable<Record<string, any>>;
 		builderBlock: BuilderBlock;
@@ -100,7 +100,7 @@
 	{#each columns ?? [] as column, index (index)}
 		{@const attrs = { ...(column.link ? { href: column.link } : {}), class: 'builder-column', style: column_style(index) }}
 		{#if column.link && builderLinkComponent}
-			{@const Link = builderLinkComponent as any}
+			{@const Link = builderLinkComponent}
 			<Link {...attrs}>{@render column_blocks(column, index)}</Link>
 		{:else}
 			<svelte:element this={column.link ? 'a' : 'div'} {...attrs}>{@render column_blocks(column, index)}</svelte:element>
@@ -108,7 +108,7 @@
 	{/each}
 </div>
 
-{#snippet column_blocks(column: Column, index: number)}
+{#snippet column_blocks(column, index)}
 	<Blocks
 		path={`columns.${index}.blocks`}
 		parent={builderBlock.id}

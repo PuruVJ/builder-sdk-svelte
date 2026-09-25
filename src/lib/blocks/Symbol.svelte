@@ -27,7 +27,7 @@
 		builderLinkComponent = undefined
 	}: {
 		symbol?: SymbolInfo;
-		builderComponents: RegisteredComponents;
+		builderComponents: any;
 		attributes?: Record<string, unknown>;
 		dynamic?: boolean;
 		builderContext: Writable<Record<string, any>>;
@@ -84,7 +84,7 @@
 		apiVersion={ctx.apiVersion}
 		apiKey={symbol?.global && symbol?.ownerId ? symbol.ownerId : ctx.apiKey}
 		context={{ ...ctx.context, symbolId: builderBlock?.id }}
-		customComponents={builderComponents as never}
+		customComponents={builderComponents}
 		data={{ ...symbol?.data, ...ctx.localState, ...content_to_use?.data?.state }}
 		canTrack={ctx.canTrack}
 		model={symbol?.model ?? ''}

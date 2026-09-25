@@ -79,42 +79,42 @@
 {@html own_css(bound ?? compiled)}
 {@render pick(bound ?? compiled)?.(bound ?? compiled)}
 
-{#snippet plain_s(c: Compiled)}
+{#snippet plain_s(c)}
 	{@html c.html}
 {/snippet}
 
-{#snippet repeat_s(_c: Compiled)}
+{#snippet repeat_s(_c)}
 	<Repeat {compiled} {scope} />
 {/snippet}
 
-{#snippet bound_s(_c: Compiled)}
+{#snippet bound_s(_c)}
 	<Bound {block} {scope} {compiled} />
 {/snippet}
 
-{#snippet div_kids_s(c: Compiled)}
+{#snippet div_kids_s(c)}
 	<!-- Also an entry registered WITHOUT a component (an app "removing" a built-in): the wrapper and
 	     the block's children, like the official SDK. -->
 	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (child)}<Block block={child} {scope} />{/each}</div>
 {/snippet}
 
-{#snippet div_comp_s(c: Compiled)}
+{#snippet div_comp_s(c)}
 	<div {...wrapper_attrs(c, scope, false)}>{@render component_s(c)}</div>
 {/snippet}
 
-{#snippet element_s(c: Compiled)}
+{#snippet element_s(c)}
 	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)}>{@render inner(c)}</svelte:element>
 {/snippet}
 
-{#snippet empty_s(c: Compiled)}
+{#snippet empty_s(c)}
 	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)} />
 {/snippet}
 
-{#snippet link_s(c: Compiled)}
-	{@const Tag = scope.ctx.link_component as any}
+{#snippet link_s(c)}
+	{@const Tag = scope.ctx.link_component}
 	<Tag {...wrapper_attrs(c, scope, true)}>{@render inner(c)}</Tag>
 {/snippet}
 
-{#snippet inner(c: Compiled)}
+{#snippet inner(c)}
 	{#if c.comp?.component}
 		{@render component_s(c)}
 	{:else}
@@ -122,8 +122,9 @@
 	{/if}
 {/snippet}
 
-{#snippet component_s(c: Compiled)}
-	{@const Comp = c.comp!.component as any}
+{#snippet component_s(c)}
+	<!-- (templates are plain JS: the component ships as source and the app compiles it) -->
+	{@const Comp = c.comp.component}
 	{#if Comp.load}
 		<Awaiter load={Comp.load} fallback={Comp.fallback} props={component_props(c, scope)}>
 			{#each c.children as child (child)}<Block block={child} {scope} />{/each}

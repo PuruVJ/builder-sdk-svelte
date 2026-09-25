@@ -7,6 +7,8 @@
 
 	let { compiled, scope }: { compiled: Compiled; scope: Scope } = $props();
 	const items = $derived((scope.ctx.version(), repeat_scopes(compiled, scope)));
+	// svelte-ignore state_referenced_locally
+	const item_block = compiled.repeat!.block;
 </script>
 
 {#if items?.length}
@@ -14,6 +16,6 @@
 		{@html `<style data-id="builderio-block" nonce="${scope.ctx.nonce}">${compiled.css}</style>`}
 	{/if}
 	{#each items as item_scope}
-		<Block block={compiled.repeat!.block} scope={item_scope} item />
+		<Block block={item_block} scope={item_scope} item />
 	{/each}
 {/if}

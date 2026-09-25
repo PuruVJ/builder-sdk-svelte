@@ -10,7 +10,7 @@
 		attributes?: Record<string, unknown>;
 		link?: string;
 		openLinkInNewTab?: boolean;
-		builderLinkComponent?: unknown;
+		builderLinkComponent?: any;
 		text?: string;
 		[k: string]: unknown;
 	} = $props();
@@ -28,7 +28,7 @@
 </script>
 
 {#if link && builderLinkComponent}
-	{@const Link = builderLinkComponent as any}
+	{@const Link = builderLinkComponent}
 	<Link {...attrs()}>{text}</Link>
 {:else}
 	<svelte:element this={link ? 'a' : 'button'} {...attrs()}>{text}</svelte:element>

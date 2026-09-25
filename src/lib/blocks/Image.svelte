@@ -54,7 +54,7 @@
 	const has_children = $derived(!!builderBlock?.children?.length);
 </script>
 
-{#snippet picture(s: string | undefined)}
+{#snippet picture(s)}
 	<picture>
 		{#if webp(s)}
 			<source type="image/webp" srcset={webp(s)} />

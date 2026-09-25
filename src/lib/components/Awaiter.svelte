@@ -8,8 +8,8 @@
 		props,
 		children
 	}: {
-		load: (() => Promise<{ default: unknown }>) | string;
-		fallback?: unknown;
+		load: (() => Promise<{ default: any }>) | string;
+		fallback?: any;
 		props: Record<string, unknown>;
 		children?: Snippet;
 	} = $props();
@@ -20,10 +20,10 @@
 
 {#await pending}
 	{#if fallback}
-		{@const Fallback = fallback as any}
+		{@const Fallback = fallback}
 		<Fallback />
 	{/if}
 {:then mod}
-	{@const Comp = mod.default as any}
+	{@const Comp = mod.default}
 	<Comp {...props}>{@render children?.()}</Comp>
 {/await}
