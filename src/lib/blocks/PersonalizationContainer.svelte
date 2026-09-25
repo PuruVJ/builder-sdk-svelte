@@ -5,6 +5,7 @@
 	import { is_editing, is_previewing } from '../internal/env.js';
 	import { get_user_attributes_cookie, on_user_attributes } from '../internal/user-attributes.js';
 	import { all_attrs } from './helpers.js';
+	import { variants_style } from '../internal/tags.js';
 	import { blocks_to_render, DEFAULT_INDEX, filter_variants, script_tag, scripts_for, type Variant } from './personalization.js';
 	import Blocks from '../components/Blocks.svelte';
 
@@ -99,7 +100,7 @@
 		/>
 	{:else}
 		{#if scripts}
-			{@html `<style  data-id=variants-styles-${builderBlock?.id}  nonce=${nonce}  >${scripts.hide_styles}</style>`}
+			{@html variants_style(builderBlock?.id, nonce, scripts.hide_styles)}
 			{@html inline_script(`variants-visibility-script-${builderBlock?.id}`, scripts.visibility)}
 			{#each list as variant, index}
 				<Blocks

@@ -17,6 +17,7 @@
 	import { is_editing, is_previewing } from '../internal/env.js';
 	import { get_cookie, interaction_properties, track } from '../internal/track.js';
 	import { script_tag, update_variant_visibility_script } from '../internal/ab-tests.js';
+	import { blocks_sheet, content_style } from '../internal/tags.js';
 	import Blocks from './Blocks.svelte';
 
 	let {
@@ -89,8 +90,7 @@
 
 	// svelte-ignore state_referenced_locally
 	const styles_html =
-		`<style data-id="builderio-content" nonce="${nonce}">${content_styles(ctx.content, isNestedRender)}</style>` +
-		(ctx.plan.sheet ? `<style data-id="builderio-blocks" nonce="${nonce}">${ctx.plan.sheet}</style>` : '');
+		content_style(nonce, content_styles(ctx.content, isNestedRender)) + (ctx.plan.sheet ? blocks_sheet(nonce, ctx.plan.sheet) : '');
 
 	let clicked = false;
 

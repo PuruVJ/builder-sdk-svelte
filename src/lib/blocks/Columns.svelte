@@ -4,6 +4,7 @@
 	import type { BuilderBlock, RegisteredComponents } from '../types.js';
 	import { sizes_for } from '../internal/breakpoints.js';
 	import { stringify_styles } from '../internal/css.js';
+	import { columns_style } from '../internal/tags.js';
 	import Blocks from '../components/Blocks.svelte';
 
 	type Column = { blocks?: BuilderBlock[]; width?: number; link?: string };
@@ -96,7 +97,7 @@
 	style={stringify_styles({ '--flex-dir': flex_dir, '--flex-dir-tablet': tablet(flex_dir, 'row') })}
 	class={`builder-columns ${builderBlock?.id}-breakpoints div`}
 >
-	{@html `<style data-id="builderio-columns" nonce="${ctx.nonce ?? ''}">${columns_css()}</style>`}
+	{@html columns_style(ctx.nonce, columns_css())}
 	{#each columns ?? [] as column, index (index)}
 		{@const attrs = { ...(column.link ? { href: column.link } : {}), class: 'builder-column', style: column_style(index) }}
 		{#if column.link && builderLinkComponent}

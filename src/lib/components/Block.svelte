@@ -14,6 +14,7 @@
 	import { component_props, wrapper_attrs } from '../internal/render.js';
 	import { SCOPE_KEY } from '../internal/keys.js';
 	import { plain_html } from '../internal/plain.js';
+	import { block_style } from '../internal/tags.js';
 	import Block from './Block.svelte';
 	import Bound from './Bound.svelte';
 	import Repeat from './Repeat.svelte';
@@ -68,11 +69,11 @@
 		if (c.tag === 'div') return c.comp?.component ? div_comp_s : div_kids_s;
 		return element_s;
 	}
-	/** The block's own `<style>` when its rules are not already in the content's one sheet. */
+	/** The block's own style tag when its rules are not already in the content's one sheet. */
 	function own_css(c: Compiled): string {
 		if (!c.visible || !c.css || (!bound && (compiled.repeat || compiled.bindings))) return '';
 		if (static_block && scope.ctx.plan.in_sheet.has(block)) return '';
-		return `<style data-id="builderio-block" nonce="${scope.ctx.nonce}">${c.css}</style>`;
+		return block_style(scope.ctx.nonce, c.css);
 	}
 </script>
 
