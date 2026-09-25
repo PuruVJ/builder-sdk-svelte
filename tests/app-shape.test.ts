@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normalize } from './normalize.js';
 // @ts-ignore built by `pnpm bench:build`
-import { app_components, render_app_page } from '../bench/dist/entry.js';
+import { app_components, components_for, render_app_page, render_content } from '../bench/dist/entry.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const ELEMENT = '@builder.io/sdk:Element';
@@ -88,4 +88,30 @@ describe('whole field pages (4 Content roots, 230-entry list) render the same', 
 			expect(r.official.css.filter((x) => !r.ours.css.includes(x))).toEqual([]);
 		});
 	}
+});
+
+describe('a container handing `builderComponents` back to <Blocks> stays in the same plan', () => {
+	// The stand-in component renders its option block arrays through
+	// `<Blocks registeredComponents={builderComponents}>` (the field container pattern). That object
+	// must map back to the content's own registry: a new one would mean a second, unprepared plan —
+	// every nested block compiled again and emitting its own <style> next to the page's one sheet.
+	const BLOCK_STYLE_RE = /data-id="builderio-block"/g;
+	const E = '@builder.io/sdk:Element';
+	const styled = (id: string) => ({ '@type': E, id, component: { name: 'Text', options: { text: id } }, responsiveStyles: { large: { color: 'red' } } });
+	const content = {
+		id: 'nested',
+		data: { blocks: [{ '@type': E, id: 'builder-box', component: { name: 'Gen - Container', options: { slotBlocks: [styled('builder-n1'), styled('builder-n2')] } } }] }
+	};
+	it('nested blocks render with no per-block style tag; their rules are in the sheet', () => {
+		const html = render_content('ours', {
+			content,
+			model: 'page',
+			apiKey: 'k',
+			customComponents: components_for(['Gen - Container']).ours,
+			canTrack: false
+		}).body;
+		expect(html).toContain('builder-n2');
+		expect(html.match(BLOCK_STYLE_RE)).toBeNull();
+		expect(html).toMatch(/data-id="builderio-blocks"[^>]*>[^<]*\.builder-n1/);
+	});
 });

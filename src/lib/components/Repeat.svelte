@@ -13,7 +13,7 @@
 </script>
 
 {#if items?.length}
-	{#if compiled.css && !scope.ctx.plan.in_sheet.has(compiled.src)}
+	{#if compiled.css && !scope.ctx.plan.is_in_sheet(compiled)}
 		{@html block_style(scope.ctx.nonce, compiled.css)}
 	{/if}
 	{#each items as item_scope}

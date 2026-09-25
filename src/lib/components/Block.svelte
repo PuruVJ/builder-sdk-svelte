@@ -1,10 +1,20 @@
-<script lang="ts">
+<script module lang="ts">
 	/**
 	 * One block. The official SDK renders each block through ~9 components (Block → StyleWrapper →
 	 * BlockStyles → InlinedStyles, BlockWrapper → DynamicRenderer → ComponentRef → InteractiveElement →
-	 * the component) with ~25 derived values each on the client. Here a STATIC block is this one
-	 * component with no reactive state at all: its compiled record is read once. Only a block with
-	 * bindings (Bound) or a repeat (Repeat) gets reactive state, re-deriving when root state changes.
+	 * the component) with ~25 derived values each on the client.
+	 *
+	 * Here a STATIC block (no bindings, repeat or animations — nearly all of them) is not a component
+	 * at all: it renders through the exported `view` snippet, reading its compiled record once. Only a
+	 * block with behaviour is a <Block> component instance: bindings (Bound) and repeats (Repeat) get
+	 * reactive state, animations a mount hook, a repeat item its own context layer.
+	 *
+	 * ONE dispatch per level, never an if/else-if chain: each `{#if}` / `{:else if}` /
+	 * `<svelte:element>` is a nested effect and the browser hydrates by recursing through them (a chain
+	 * of ~8 per block overflowed the stack at ~45 levels). A plain `<div>` (the common tag) is a static
+	 * element with no effect at all; a plain subtree is one string (internal/plain.ts).
+	 *
+	 * Every snippet takes (compiled, scope) and reads nothing else, so they live at module level.
 	 */
 	import { onMount, setContext } from 'svelte';
 	import { bind_animations, type Animation } from '../internal/animator.js';
@@ -20,6 +30,41 @@
 	import Repeat from './Repeat.svelte';
 	import Awaiter from './Awaiter.svelte';
 
+	export { view };
+
+	/** A block that needs a component instance of its own (state, a mount hook). */
+	function needs_component(c: Compiled): boolean {
+		return !!(c.bindings || c.repeat || c.src.animations?.length);
+	}
+
+	/** The shape a block renders as (its compiled record final: static, or a bound block's copy). */
+	function shape_of(c: Compiled, scope: Scope) {
+		if (!c.visible) return null;
+		if (c.no_wrap) return c.comp?.component ? component_s : null;
+		if (c.is_link && scope.ctx.link_component) return link_s;
+		if (c.empty_tag) return empty_s;
+		if (c.tag === 'div') return c.comp?.component ? div_comp_s : div_kids_s;
+		return element_s;
+	}
+
+	/** A static block: its whole subtree as one string when nothing in it has behaviour. */
+	function static_shape(c: Compiled, scope: Scope) {
+		if (plain_html(scope.ctx.plan, c) !== null && !(c.links && scope.ctx.link_component)) return plain_s;
+		return shape_of(c, scope);
+	}
+
+	/** A static block's own style tag when its rules are not already in the content's one sheet. */
+	function static_css(c: Compiled, scope: Scope): string {
+		if (!c.visible || !c.css || scope.ctx.plan.is_in_sheet(c)) return '';
+		return block_style(scope.ctx.nonce, c.css);
+	}
+
+	function entry_of(c: Compiled) {
+		return needs_component(c) ? component_entry_s : static_entry_s;
+	}
+</script>
+
+<script lang="ts">
 	let {
 		block,
 		scope: scope_prop,
@@ -37,8 +82,6 @@
 	// re-keys the whole <Content>). svelte-ignore: deliberate non-reactive reads.
 	// svelte-ignore state_referenced_locally
 	const compiled = scope.ctx.plan.compile(block);
-	// svelte-ignore state_referenced_locally
-	const static_block = !compiled.bindings && !compiled.repeat;
 	// A repeat item is its own state layer: <Blocks> inside its components must see the item's scope
 	// (the official RepeatedBlock sets a new context per item).
 	// svelte-ignore state_referenced_locally
@@ -51,88 +94,94 @@
 		onMount(() => bind_animations(list.map((a) => ({ ...a, elementId: id }))));
 	}
 
-	// ONE dispatch per level, not an if/else-if chain. Each `{#if}` / `{:else if}` / `<svelte:element>`
-	// is a nested effect, and the browser hydrates a tree by recursing through every one of them: a
-	// chain of ~8 per block overflowed the stack at ~45 levels of nesting. A single dynamic `{@render}`
-	// picks the shape; a plain `<div>` (the common tag) is a static element with no effect at all.
 	function pick(c: Compiled) {
 		if (!bound) {
 			if (compiled.repeat) return repeat_s;
 			if (compiled.bindings) return bound_s;
-			// No behaviour anywhere below: the whole subtree is one HTML string (internal/plain.ts).
-			if (plain_html(scope.ctx.plan, compiled) !== null && !(compiled.links && scope.ctx.link_component)) return plain_s;
+			return static_shape(c, scope);
 		}
-		if (!c.visible) return null;
-		if (c.no_wrap) return c.comp?.component ? component_s : null;
-		if (c.is_link && scope.ctx.link_component) return link_s;
-		if (c.empty_tag) return empty_s;
-		if (c.tag === 'div') return c.comp?.component ? div_comp_s : div_kids_s;
-		return element_s;
+		return shape_of(c, scope);
 	}
 	/** The block's own style tag when its rules are not already in the content's one sheet. */
 	function own_css(c: Compiled): string {
-		if (!c.visible || !c.css || (!bound && (compiled.repeat || compiled.bindings))) return '';
-		if (static_block && scope.ctx.plan.in_sheet.has(block)) return '';
-		return block_style(scope.ctx.nonce, c.css);
+		if (!bound && (compiled.repeat || compiled.bindings)) return '';
+		if (!bound) return static_css(c, scope);
+		return c.visible && c.css ? block_style(scope.ctx.nonce, c.css) : '';
 	}
 </script>
 
 {@html own_css(bound ?? compiled)}
-{@render pick(bound ?? compiled)?.(bound ?? compiled)}
+{@render pick(bound ?? compiled)?.(bound ?? compiled, scope)}
 
-{#snippet plain_s(c)}
+<!-- A block in a list: static ones render right here, the rest as a <Block> instance. -->
+{#snippet view(block, scope)}
+	{@const c = scope.ctx.plan.compile(block)}
+	{@render entry_of(c)(c, scope)}
+{/snippet}
+
+{#snippet component_entry_s(c, scope)}
+	<Block block={c.src} {scope} />
+{/snippet}
+
+<!-- (the same output as a <Block>: its style tag, one space, its shape) -->
+{#snippet static_entry_s(c, scope)}
+	{@html static_css(c, scope)}
+	{@render static_shape(c, scope)?.(c, scope)}
+{/snippet}
+
+{#snippet plain_s(c, _scope)}
 	{@html c.html}
 {/snippet}
 
-{#snippet repeat_s(_c)}
-	<Repeat {compiled} {scope} />
+{#snippet repeat_s(c, scope)}
+	<Repeat compiled={c} {scope} />
 {/snippet}
 
-{#snippet bound_s(_c)}
-	<Bound {block} {scope} {compiled} />
+{#snippet bound_s(c, scope)}
+	<Bound block={c.src} {scope} compiled={c} />
 {/snippet}
 
-{#snippet div_kids_s(c)}
+{#snippet div_kids_s(c, scope)}
 	<!-- Also an entry registered WITHOUT a component (an app "removing" a built-in): the wrapper and
 	     the block's children, like the official SDK. -->
-	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (child)}<Block block={child} {scope} />{/each}</div>
+	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (child)}{@render view(child, scope)}{/each}</div>
 {/snippet}
 
-{#snippet div_comp_s(c)}
-	<div {...wrapper_attrs(c, scope, false)}>{@render component_s(c)}</div>
+{#snippet div_comp_s(c, scope)}
+	<div {...wrapper_attrs(c, scope, false)}>{@render component_s(c, scope)}</div>
 {/snippet}
 
-{#snippet element_s(c)}
-	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)}>{@render inner(c)}</svelte:element>
+{#snippet element_s(c, scope)}
+	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)}>{@render inner(c, scope)}</svelte:element>
 {/snippet}
 
-{#snippet empty_s(c)}
+{#snippet empty_s(c, scope)}
 	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)} />
 {/snippet}
 
-{#snippet link_s(c)}
+{#snippet link_s(c, scope)}
 	{@const Tag = scope.ctx.link_component}
-	<Tag {...wrapper_attrs(c, scope, true)}>{@render inner(c)}</Tag>
+	<Tag {...wrapper_attrs(c, scope, true)}>{@render inner(c, scope)}</Tag>
 {/snippet}
 
-{#snippet inner(c)}
+{#snippet inner(c, scope)}
 	{#if c.comp?.component}
-		{@render component_s(c)}
+		{@render component_s(c, scope)}
 	{:else}
-		{#each c.children as child (child)}<Block block={child} {scope} />{/each}
+		{#each c.children as child (child)}{@render view(child, scope)}{/each}
 	{/if}
 {/snippet}
 
-{#snippet component_s(c)}
+{#snippet component_s(c, scope)}
 	<!-- (templates are plain JS: the component ships as source and the app compiles it) -->
 	{@const Comp = c.comp.component}
 	{#if Comp.load}
 		<Awaiter load={Comp.load} fallback={Comp.fallback} props={component_props(c, scope)}>
-			{#each c.children as child (child)}<Block block={child} {scope} />{/each}
+			{#each c.children as child (child)}{@render view(child, scope)}{/each}
 		</Awaiter>
 	{:else}
 		<Comp {...component_props(c, scope)}>
-			{#each c.children as child (child)}<Block block={child} {scope} />{/each}
+			{#each c.children as child (child)}{@render view(child, scope)}{/each}
 		</Comp>
 	{/if}
 {/snippet}

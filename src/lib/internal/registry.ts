@@ -10,6 +10,10 @@ import type { RegisteredComponent, RegisteredComponents } from '../types.js';
 import { default_components } from './defaults.js';
 
 export const REGISTRY_BRAND = Symbol.for('puruvj.builder.registry');
+/** On a `builderComponents` object: the registry it came from, so handing it back to
+ *  `<Blocks registeredComponents>` (what container components do) reuses the SAME registry — and
+ *  so the same plan, its compiled blocks and its one sheet — instead of building a new one. */
+const REGISTRY_OF = Symbol.for('puruvj.builder.registry-of');
 
 export interface Registry {
 	[REGISTRY_BRAND]: true;
@@ -23,8 +27,10 @@ const by_list = new WeakMap<object, Registry>();
 let by_list_empty: Registry | null = null;
 
 export function registry_for(custom: RegisteredComponent[] | RegisteredComponents | Registry | undefined | null): Registry {
-	if (custom && (custom as Registry)[REGISTRY_BRAND]) return custom as Registry;
 	if (!custom) return (by_list_empty ??= build([]));
+	const owner = (custom as { [REGISTRY_OF]?: Registry })[REGISTRY_OF];
+	if (owner) return owner;
+	if ((custom as Registry)[REGISTRY_BRAND]) return custom as Registry;
 	let reg = by_list.get(custom);
 	if (!reg) {
 		// An array (the `customComponents` prop) or a name→component object (`builderComponents`,
@@ -44,7 +50,7 @@ function build_exact(list: RegisteredComponent[]): Registry {
 	const by_name = new Map<string, RegisteredComponent>();
 	for (const entry of list) if (entry?.name) by_name.set(entry.name, entry);
 	const objects = new Map<string, RegisteredComponents>();
-	return {
+	const registry: Registry = {
 		[REGISTRY_BRAND]: true,
 		by_name,
 		as_object(model: string) {
@@ -52,15 +58,13 @@ function build_exact(list: RegisteredComponent[]): Registry {
 			if (!obj) {
 				obj = {};
 				for (const [name, entry] of by_name) if (!is_restricted(entry, model)) obj[name] = entry;
-				// Brand it so <Blocks registeredComponents={builderComponents}> maps straight back here.
-				Object.defineProperty(obj, REGISTRY_BRAND, { value: true });
-				Object.defineProperty(obj, 'by_name', { value: by_name });
-				Object.defineProperty(obj, 'as_object', { value: this.as_object });
+				Object.defineProperty(obj, REGISTRY_OF, { value: registry });
 				objects.set(model, obj);
 			}
 			return obj;
 		}
 	};
+	return registry;
 }
 
 export function is_restricted(entry: RegisteredComponent | undefined, model: string | undefined): boolean {

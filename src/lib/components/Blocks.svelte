@@ -11,7 +11,8 @@
 	import { registry_for } from '../internal/registry.js';
 	import { plan_for } from '../internal/compile.js';
 	import { scope_of_store, Scope } from '../internal/scope.js';
-	import Block from './Block.svelte';
+	import { plain_html } from '../internal/plain.js';
+	import { view } from './Block.svelte';
 
 	let {
 		blocks,
@@ -79,6 +80,35 @@
 			: 'div'
 	);
 	const wrapper_props = $derived(BlocksWrapperProps ?? scope?.ctx.blocks_wrapper_props);
+
+	/**
+	 * The list as runs: a run of plain blocks (no behaviour anywhere in them, internal/plain.ts) is
+	 * ONE html string; a live block is a <Block>. A 1 000-block list of text is then one `{@html}`
+	 * instead of 1 000 components. Byte-identical: a live <Block> emits one space before its content,
+	 * so each plain block contributes ' ' + its html. Runs are objects (fresh per list), so the keyed
+	 * each never sees a duplicate key and a changed list replaces its strings.
+	 */
+	type Segment = BuilderBlock | { html: string };
+	function segments(list: BuilderBlock[], s: Scope): Segment[] {
+		const plan = s.ctx.plan;
+		const link = !!s.ctx.link_component;
+		const out: Segment[] = [];
+		let run: { html: string } | null = null;
+		for (let i = 0; i < list.length; i++) {
+			const block = list[i];
+			const c = plan.compile(block);
+			const html = c.bindings || c.repeat ? null : plain_html(plan, c);
+			if (html !== null && !(link && c.links)) {
+				if (run) run.html += ' ' + html;
+				else out.push((run = { html: ' ' + html }));
+			} else {
+				run = null;
+				out.push(block);
+			}
+		}
+		return out;
+	}
+	const list = $derived(blocks && scope ? segments(blocks, scope) : []);
 </script>
 
 <svelte:element
@@ -88,7 +118,7 @@
 	builder-path={data_path()}
 	builder-parent-id={parent}
 	{...wrapper_props}
-	>{@render children?.()}{#if blocks && scope}{#each blocks as block (block)}<Block {block} {scope} />{/each}{/if}</svelte:element
+	>{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}</svelte:element
 >
 
 <style>

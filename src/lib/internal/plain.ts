@@ -47,7 +47,7 @@ const SPECIAL_TAGS = new Set([
 ]);
 
 function escape_attr(value: unknown): string {
-	const str = String(value ?? '');
+	const str = typeof value === 'string' ? value : String(value ?? '');
 	ATTR_ESCAPE_RE.lastIndex = 0;
 	if (!ATTR_ESCAPE_RE.test(str)) return str;
 	ATTR_ESCAPE_RE.lastIndex = 0;
@@ -62,20 +62,36 @@ function escape_attr(value: unknown): string {
 	return out + str.substring(last);
 }
 
+/** Per attribute key: its emitted name and whether it is boolean, or null when Svelte drops it
+ *  (`$$` internals, invalid names, `on*` handlers). A page uses a few dozen keys: decided once. */
+type AttrName = { name: string; boolean: boolean } | null;
+const ATTR_NAMES = new Map<string, AttrName>();
+function attr_name(key: string): AttrName {
+	let info = ATTR_NAMES.get(key);
+	if (info === undefined) {
+		const name = key.toLowerCase();
+		info =
+			(key[0] === '$' && key[1] === '$') || key === '' || INVALID_ATTR_NAME_RE.test(key) || (name.length > 2 && name.startsWith('on'))
+				? null
+				: { name, boolean: BOOLEAN_ATTRIBUTES.has(name) };
+		if (ATTR_NAMES.size < 4096) ATTR_NAMES.set(key, info);
+	}
+	return info;
+}
+
 /** A spread `{...attrs}` on an HTML element, as Svelte's server renders it. */
 export function attrs_html(attrs: Record<string, unknown>): string {
 	let out = '';
-	for (const key of Object.keys(attrs)) {
+	for (const key in attrs) {
 		let value = attrs[key];
 		if (typeof value === 'function') continue;
-		if (key[0] === '$' && key[1] === '$') continue;
-		if (key === '' || INVALID_ATTR_NAME_RE.test(key)) continue;
-		const name = key.toLowerCase();
-		if (name.length > 2 && name.startsWith('on')) continue;
-		const boolean = BOOLEAN_ATTRIBUTES.has(name) || (name === 'hidden' && value !== 'until-found');
+		const info = attr_name(key);
+		if (info === null) continue;
+		const name = info.name;
+		const boolean = info.boolean || (name === 'hidden' && value !== 'until-found');
 		if (value == null || (boolean && !value && value !== '')) continue;
 		if (name === 'translate' && (value === true || value === false)) value = value ? 'yes' : 'no';
-		out += boolean ? ` ${name}=""` : ` ${name}="${escape_attr(value)}"`;
+		out += boolean ? ' ' + name + '=""' : ' ' + name + '="' + escape_attr(value) + '"';
 	}
 	return out;
 }
@@ -91,10 +107,10 @@ function kind_of(c: Compiled, plan: Plan): number {
 	if (c.bindings || c.repeat || c.actions || c.text_tpl) return NONE;
 	if (c.src.animations?.length) return NONE;
 	if (!c.visible) return EMPTY;
-	if (c.css && !plan.in_sheet.has(c.src)) return NONE;
+	if (c.css && !plan.is_in_sheet(c)) return NONE;
 	const component = c.comp?.component;
 	if (c.no_wrap) return component ? NONE : EMPTY;
-	if (!SIMPLE_TAG_RE.test(c.tag) || SPECIAL_TAGS.has(c.tag)) return NONE;
+	if (c.tag !== 'div' && (!SIMPLE_TAG_RE.test(c.tag) || SPECIAL_TAGS.has(c.tag))) return NONE;
 	if (component) {
 		if (!(c.comp as PlainEntry)[PLAIN_RENDER]) return NONE;
 		if (c.empty_tag) return VOID;

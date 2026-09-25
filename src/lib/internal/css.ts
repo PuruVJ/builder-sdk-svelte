@@ -16,32 +16,29 @@ export function kebab(key: string): string {
 	return out;
 }
 
-/** `{ a: '1', b: 2 }` → `a: 1;` lines — only string values, as the official `convertStyleMapToCSSArray`. */
-export function style_decls(style: Record<string, unknown> | undefined): string[] {
-	const out: string[] = [];
+/** `{ a: '1', b: 2 }` → `a: 1;` declarations joined by `sep` — only string values, as the official
+ *  `convertStyleMapToCSSArray(...).join(sep)`. One string built in place (no array, no join). */
+function style_decls(style: Record<string, unknown> | undefined, sep: string): string {
+	let out = '';
 	if (!style) return out;
 	for (const key in style) {
 		const value = style[key];
-		if (typeof value === 'string') out.push(`${kebab(key)}: ${value};`);
+		if (typeof value !== 'string') continue;
+		if (out !== '') out += sep;
+		out += kebab(key) + ': ' + value + ';';
 	}
 	return out;
 }
 
 /** The inline `style` attribute text of a block wrapper (official `getStyle`, svelte target). */
 export function style_attr(style: Record<string, unknown> | undefined): string {
-	return style_decls(style).join(' ');
+	return style_decls(style, ' ');
 }
 
 /** Official `createCssClass`, byte for byte. */
 export function css_class(class_name: string, styles: Record<string, unknown>, media_query?: string): string {
-	const css = `.${class_name} {
-    ${style_decls(styles).join('\n')}
-  }`;
-	return media_query
-		? `${media_query} {
-      ${css}
-    }`
-		: css;
+	const css = '.' + class_name + ' {\n    ' + style_decls(styles, '\n') + '\n  }';
+	return media_query ? media_query + ' {\n      ' + css + '\n    }' : css;
 }
 
 /** The svelte `stringifyStyles` helper every built-in block carries: `a:b;` pairs, any value type. */

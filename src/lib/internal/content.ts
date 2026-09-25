@@ -2,7 +2,7 @@
  * One `<Content>` render: its plan, its root state, its root scope. The same composition as the
  * official SDK (`getContentInitialValue` / `getRootStateInitialValue`), built once per render.
  */
-import type { BuilderContent, RegisteredComponent } from '../types.js';
+import type { BuilderBlock, BuilderContent, RegisteredComponent } from '../types.js';
 import { plan_for, type Plan } from './compile.js';
 import { evaluate, type Globals } from './evaluate.js';
 import { is_browser, is_editing } from './env.js';
@@ -53,16 +53,17 @@ export function initial_root_state(
  * once. (When `data` carries its own `blocks`, those are what render: key by that array instead.)
  */
 export function plan_of(input: ContentInput): Plan {
-	const content = merged_content(input.content, input.data);
-	const blocks = content?.data?.blocks;
-	const key = input.data?.blocks ? (blocks as object) : (input.content ?? EMPTY);
+	// (what merged_content would give, read without building it: `data` wins, `meta` is the content's)
+	const own_blocks = input.data?.blocks as BuilderBlock[] | undefined;
+	const blocks = own_blocks ?? input.content?.data?.blocks;
+	const key = own_blocks ? (own_blocks as object) : (input.content ?? EMPTY);
 	return plan_for(
 		key,
 		{
 			registry: registry_for(input.customComponents),
 			model: input.model,
 			locale: input.locale,
-			breakpoints: content?.meta?.breakpoints
+			breakpoints: input.content?.meta?.breakpoints
 		},
 		blocks
 	);
@@ -78,35 +79,36 @@ export function create_content(
 	const registry = plan.registry;
 	let root = initial_root_state(input.content, input.data, input.locale);
 	let initializing = true;
-	const tracking = {
-		apiKey: input.apiKey ?? null,
-		canTrack: input.canTrack ?? true,
-		contentId: content?.id,
-		variationId: content?.testVariationId
-	};
-	const globals: Globals = {
+	// The `builder` globals content code sees — built only when some code runs (most content has none).
+	let globals: Globals | undefined;
+	const make_globals = (): Globals => ({
 		isEditing: is_editing(),
 		isBrowser: is_browser(),
 		isServer: !is_browser(),
 		getUserAttributes: () => get_user_attributes(),
 		trackConversion: (amount, customProperties) => {
-			if (!tracking.apiKey || tracking.canTrack === false) return;
+			const api_key = input.apiKey ?? null;
+			const can_track = input.canTrack ?? true;
+			if (!api_key || can_track === false) return;
 			void track({
 				type: 'conversion',
-				apiKey: tracking.apiKey,
-				canTrack: tracking.canTrack,
-				contentId: tracking.contentId,
-				variationId: tracking.variationId !== tracking.contentId ? tracking.variationId : undefined,
+				apiKey: api_key,
+				canTrack: can_track,
+				contentId: content?.id,
+				variationId: content?.testVariationId !== content?.id ? content?.testVariationId : undefined,
 				metadata: { ...(customProperties || {}), ...(amount !== undefined ? { amount } : {}) },
 				apiHost: input.apiHost
 			});
 		}
-	};
+	});
 	const ctx: ContentCtx = {
 		plan,
 		registry,
 		model: input.model,
 		content,
+		get globals() {
+			return (globals ??= make_globals());
+		},
 		get root() {
 			return root;
 		},
@@ -114,7 +116,6 @@ export function create_content(
 			root = v;
 		},
 		context: input.context ?? {},
-		globals,
 		api_key: input.apiKey,
 		api_version: input.apiVersion,
 		api_host: input.apiHost,
@@ -139,7 +140,7 @@ export function create_content(
 	const js = content?.data?.jsCode;
 	if (js) {
 		const writable = () => scope.writable_state();
-		evaluate(js, { state: writable, writable_state: writable, globals, context: ctx.context }, false);
+		evaluate(js, { state: writable, writable_state: writable, globals: ctx.globals, context: ctx.context }, false);
 	}
 	initializing = false;
 	return { ctx, scope };

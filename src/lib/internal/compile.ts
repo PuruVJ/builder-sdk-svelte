@@ -23,6 +23,7 @@ import { parse_path } from './paths.js';
 import { lookup, type Registry } from './registry.js';
 
 const ELEMENT_TYPE = '@builder.io/sdk:Element';
+const LOCALIZED_TYPE = '@builder.io/core:LocalizedValue';
 const EMPTY_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 const TEXT_TPL_RE = /{{([^}]+)}}/g;
 
@@ -53,6 +54,8 @@ export interface Compiled {
 	/** official BlockStyles `canShowBlock` + css text */
 	css: string;
 	children: BuilderBlock[];
+	/** Its rules are in the plan's one sheet (it emits no style tag of its own). */
+	in_sheet?: boolean;
 	/** The subtree as plain HTML (plain.ts): undefined = not computed yet, null = has behaviour. */
 	html?: string | null;
 	/** The plain subtree contains a link (a link component, when set, needs a live <Block>). */
@@ -74,8 +77,9 @@ export class Plan {
 	readonly sizes: Sizes;
 	readonly has_xsmall: boolean;
 	readonly compiled = new WeakMap<BuilderBlock, Compiled>();
-	/** Blocks whose CSS is already in {@link sheet} (their render emits no `<style>` of its own). */
-	readonly in_sheet = new WeakSet<BuilderBlock>();
+	/** Repeated blocks (the per-item copy without `repeat`) whose rules are in {@link sheet}; every
+	 *  other block carries that on its compiled record (`in_sheet`), no lookup needed. */
+	readonly repeat_in_sheet = new WeakSet<BuilderBlock>();
 	sheet = '';
 	/** What the content uses that needs page-level helper scripts (found by the same one walk). */
 	readonly flags = { personalization: false, ab: false };
@@ -93,77 +97,184 @@ export class Plan {
 	compile(block: BuilderBlock): Compiled {
 		let c = this.compiled.get(block);
 		if (!c) {
-			c = compile_block(block, this);
+			c = compile_block(block, this, false);
 			this.compiled.set(block, c);
 		}
 		return c;
 	}
 
+	/** The block's rules are already in {@link sheet}: it emits no style tag of its own. */
+	is_in_sheet(c: Compiled): boolean {
+		return c.in_sheet === true || this.repeat_in_sheet.has(c.src);
+	}
+
 	/**
-	 * Compile every block reachable from `blocks` (children, and blocks nested anywhere in options —
-	 * a Columns column, a custom container's slot) and gather the CSS of the static, visible ones
-	 * into {@link sheet}. One walk per content.
+	 * ONE walk over the content: find every block reachable from `blocks` (children, and blocks
+	 * nested anywhere in options — a Columns column, a custom container's slot), note which blocks
+	 * own localized values, then compile each block once and gather the CSS of the static, visible
+	 * ones into {@link sheet}.
+	 *
+	 * This walk is the only full pass over the content's data, so it is kept to the bone: an explicit
+	 * stack (any depth), only objects pushed, no per-object bookkeeping. Content is a tree (JSON), so
+	 * there is no `seen` set; a cycle — only possible in hand-built content — exhausts a visit budget
+	 * and falls back to a walk that tracks what it has seen. A block found to own no localized value
+	 * compiles without the localized-value walk of its options.
 	 */
 	prepare(blocks: BuilderBlock[] | undefined): void {
 		if (!blocks) return;
-		const parts: string[] = [];
-		const seen = new WeakSet<object>();
-		// An explicit stack, not recursion: content of any depth. Pushed in reverse so blocks are met in
-		// document order (the sheet's rule order).
-		const stack: unknown[] = [blocks];
-		const push_all = (values: unknown[]) => {
-			for (let i = values.length - 1; i >= 0; i--) stack.push(values[i]);
-		};
-		while (stack.length) {
-			const value = stack.pop();
-			if (value === null || typeof value !== 'object' || seen.has(value)) continue;
-			seen.add(value);
-			if (Array.isArray(value)) {
-				push_all(value);
-				continue;
-			}
-			const obj = value as Record<string, unknown>;
-			// A nested content (an inline symbol) with A/B variations needs the page's variant helpers.
-			if (obj.variations && typeof obj.variations === 'object' && obj.data && Object.keys(obj.variations).length)
-				this.flags.ab = true;
-			if (obj['@type'] === ELEMENT_TYPE) {
-				const block = obj as BuilderBlock;
-				if (block.component?.name === 'PersonalizationContainer') this.flags.personalization = true;
-				const c = this.compile(block);
-				if (!c.bindings && c.css) {
-					parts.push(c.css);
-					this.in_sheet.add(block);
-				}
+		const localized = new Set<BuilderBlock>();
+		const found = find_blocks(blocks, localized, this.flags, MAX_VISITS) ?? find_blocks_guarded(blocks, localized, this.flags);
+		const any_localized = localized.size > 0; // most content has none: no lookup per block
+		let sheet = '';
+		for (let i = 0; i < found.length; i++) {
+			const block = found[i];
+			if (this.compiled.has(block)) continue; // the same object reached twice
+			const c = compile_block(block, this, !(any_localized && localized.has(block)));
+			this.compiled.set(block, c);
+			if (!c.bindings && c.css) {
+				sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
+				c.in_sheet = true;
 				// The repeated block renders `c.repeat.block` per item: same styles, already in.
-				if (c.repeat && !c.bindings && c.css) this.in_sheet.add(c.repeat.block);
-				// visited after this block: children, then component options, then block options
-				if (block.options) stack.push(block.options);
-				if (block.component?.options) stack.push(block.component.options);
-				if (block.children) stack.push(block.children);
-				continue;
+				if (c.repeat) this.repeat_in_sheet.add(c.repeat.block);
 			}
-			const keys = Object.keys(obj);
-			for (let i = keys.length - 1; i >= 0; i--) stack.push(obj[keys[i]]);
 		}
-		this.sheet = parts.join(' ');
+		this.sheet = sheet;
 	}
 
 	/** Compile a block without caching (a bound block's per-render copy). */
 	compile_fresh(block: BuilderBlock): Compiled {
-		return compile_block(block, this);
+		return compile_block(block, this, false);
 	}
 }
 
-function compile_block(block: BuilderBlock, plan: Plan): Compiled {
+/** Objects one content walk may visit before it assumes a cycle (a 4 MB page has ~200 000). */
+const MAX_VISITS = 1 << 23;
+type Flags = Plan['flags'];
+
+/** A nested content (an inline symbol) with A/B variations needs the page's variant helpers. */
+function has_variations(obj: Record<string, unknown>): boolean {
+	const v = obj.variations;
+	if (!v || typeof v !== 'object' || !obj.data) return false;
+	for (const _ in v) return true;
+	return false;
+}
+
+/**
+ * Every Element reachable from `root`, in document order along block lists; owners of localized
+ * values into `localized`; page flags into `flags`. Null when the visit budget runs out (a cycle).
+ * Two parallel stacks: the value, and the block whose `component.options` it sits in (localized
+ * values belong to that block; a nested block owns its own).
+ */
+function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: Flags, budget: number): BuilderBlock[] | null {
+	const found: BuilderBlock[] = [];
+	const values: object[] = [root];
+	const owners: Array<BuilderBlock | null> = [null];
+	while (values.length) {
+		if (--budget === 0) return null;
+		const value = values.pop()!;
+		const owner = owners.pop()!;
+		if (Array.isArray(value)) {
+			for (let i = value.length - 1; i >= 0; i--) {
+				const v = value[i];
+				if (typeof v === 'object' && v !== null) {
+					values.push(v);
+					owners.push(owner);
+				}
+			}
+			continue;
+		}
+		const obj = value as Record<string, unknown>;
+		const type = obj['@type'];
+		if (type === ELEMENT_TYPE) {
+			const block = obj as BuilderBlock;
+			found.push(block);
+			const component = block.component;
+			// visited after this block: children, then component options, then block options
+			if (block.options) {
+				values.push(block.options);
+				owners.push(null);
+			}
+			if (component) {
+				if (component.name === 'PersonalizationContainer') flags.personalization = true;
+				if (component.options) {
+					values.push(component.options);
+					owners.push(block);
+				}
+			}
+			if (block.children) {
+				values.push(block.children);
+				owners.push(null);
+			}
+			continue;
+		}
+		if (type === LOCALIZED_TYPE && owner) localized.add(owner);
+		if (!flags.ab && has_variations(obj)) flags.ab = true;
+		for (const key in obj) {
+			const v = obj[key];
+			if (typeof v === 'object' && v !== null) {
+				values.push(v);
+				owners.push(owner);
+			}
+		}
+	}
+	return found;
+}
+
+/** {@link find_blocks} for content with cycles: the same walk, remembering what it has seen. */
+function find_blocks_guarded(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: Flags): BuilderBlock[] {
+	const found: BuilderBlock[] = [];
+	const seen = new WeakSet<object>();
+	const values: object[] = [root];
+	const owners: Array<BuilderBlock | null> = [null];
+	while (values.length) {
+		const value = values.pop()!;
+		const owner = owners.pop()!;
+		if (seen.has(value)) continue;
+		seen.add(value);
+		const obj = value as Record<string, unknown>;
+		let owner_of_children = owner;
+		if (!Array.isArray(value)) {
+			if (obj['@type'] === ELEMENT_TYPE) {
+				const block = obj as BuilderBlock;
+				found.push(block);
+				if (block.component?.name === 'PersonalizationContainer') flags.personalization = true;
+				for (const [v, o] of [
+					[block.options, null],
+					[block.component?.options, block],
+					[block.children, null]
+				] as const)
+					if (v && typeof v === 'object') {
+						values.push(v);
+						owners.push(o);
+					}
+				continue;
+			}
+			if (obj['@type'] === LOCALIZED_TYPE && owner) localized.add(owner);
+			if (!flags.ab && has_variations(obj)) flags.ab = true;
+		}
+		const keys = Object.keys(obj);
+		for (let i = keys.length - 1; i >= 0; i--) {
+			const v = obj[keys[i]];
+			if (typeof v === 'object' && v !== null) {
+				values.push(v);
+				owners.push(owner_of_children);
+			}
+		}
+	}
+	return found;
+}
+
+function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): Compiled {
 	const raw_options = block.component?.options;
-	const resolved = resolve_localized(raw_options, plan.locale);
+	// A block the content walk found to own no localized value skips the walk of its options.
+	const resolved = no_localized ? raw_options : resolve_localized(raw_options, plan.locale);
 	const builder_block =
 		resolved !== raw_options ? { ...block, component: { ...block.component!, options: resolved } } : block;
 
 	const name = block.component?.name;
 	const comp = name ? lookup(plan.registry, name, plan.model) : null;
 
-	const options: Record<string, unknown> = block.options ? { ...resolved, ...block.options } : (resolved ?? {});
+	const options: Record<string, unknown> = block.options ? { ...resolved, ...block.options } : (resolved ?? NO_OPTIONS);
 
 	let text_tpl: Compiled['text_tpl'] = null;
 	if (name === 'Text' && typeof resolved?.text === 'string' && resolved.text.includes('{{')) {
@@ -232,7 +343,7 @@ function compile_block(block: BuilderBlock, plan: Plan): Compiled {
 		no_wrap: comp?.noWrap === true,
 		is_link,
 		tag,
-		empty_tag: EMPTY_TAGS.has(tag.toLowerCase()),
+		empty_tag: tag !== 'div' && EMPTY_TAGS.has(tag.toLowerCase()),
 		options,
 		text_tpl,
 		attrs,
@@ -241,9 +352,13 @@ function compile_block(block: BuilderBlock, plan: Plan): Compiled {
 		repeat,
 		visible: shows_block && !hides_block,
 		css: styles_visible(block) ? block_css(block, plan) : '',
-		children: block.children ?? []
+		children: block.children ?? NO_CHILDREN
 	};
 }
+
+// Shared empties for the common block without options / children (read-only: never mutated).
+const NO_OPTIONS: Record<string, unknown> = Object.freeze({}) as Record<string, unknown>;
+const NO_CHILDREN: BuilderBlock[] = Object.freeze([]) as unknown as BuilderBlock[];
 
 /** official BlockStyles `canShowBlock` */
 function styles_visible(block: BuilderBlock): boolean {
