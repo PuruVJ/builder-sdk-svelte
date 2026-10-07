@@ -63,6 +63,21 @@
 			: handle_ab_testing(props.content, can_track)
 	);
 
+	// a new content object (even with the same id) or another winning variation re-renders the view
+	let view_key = {};
+	let keyed_content: unknown = undefined;
+	let keyed_variation: unknown = undefined;
+	const content_key = $derived.by(() => {
+		const c = props.content;
+		const v = default_content?.testVariationId;
+		if (c !== keyed_content || v !== keyed_variation) {
+			keyed_content = c;
+			keyed_variation = v;
+			view_key = {};
+		}
+		return view_key;
+	});
+
 	let Official: Component<any> | null = $state(null);
 	onMount(() => {
 		render_variants = false;
@@ -100,8 +115,7 @@
 			<ContentView {...props} content={variant} showContent={false} isSsrAbTest={true} />
 		{/each}
 	{/if}
-	<!-- keyed by the variation: the default winning after mount keeps the same DOM -->
-	{#key default_content?.testVariationId}
+	{#key content_key}
 		<ContentView {...props} content={default_content} showContent={true} isSsrAbTest={render_variants} />
 	{/key}
 {/if}
