@@ -4,7 +4,7 @@
 	 * their nested content with (official props and markup). It renders in the scope of the nearest
 	 * `<Content>` / repeat item, or of the `context` store it is handed.
 	 */
-	import { getContext } from 'svelte';
+	import { getContext, type Component } from 'svelte';
 	import type { BuilderBlock, RegisteredComponent, RegisteredComponents } from '../types.js';
 	import { kebab } from '../internal/css.js';
 	import { SCOPE_KEY } from '../internal/keys.js';
@@ -61,6 +61,13 @@
 	// svelte-ignore state_referenced_locally
 	const scope = resolve();
 
+	// No scope: rendered inside the official tree (the editor / a preview) — hand off to its Blocks.
+	let Official: Component<any> | null = $state(null);
+	if (!scope && typeof window !== 'undefined') {
+		// @ts-ignore optional peer
+		import('@builder.io/sdk-svelte/bundle/browser').then((m) => (Official = m.Blocks as never)).catch(() => {});
+	}
+
 	function data_path(): string | undefined {
 		if (!path) return undefined;
 		if (path.startsWith('this.')) return path.replace('this.', '');
@@ -111,15 +118,21 @@
 	const list = $derived(blocks && scope ? segments(blocks, scope) : []);
 </script>
 
-<svelte:element
-	this={wrapper}
-	style={style_of(styleProp)}
-	class={'builder-blocks' + (blocks?.length ? '' : ' no-blocks') + (className ? ' ' + className : '') + ' svelteelement'}
-	builder-path={data_path()}
-	builder-parent-id={parent}
-	{...wrapper_props}
-	>{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}</svelte:element
->
+{#if !scope}
+	{#if Official}
+		<Official {blocks} {parent} {path} {styleProp} {BlocksWrapperProps} {context} {className} {linkComponent} {registeredComponents} />
+	{/if}
+{:else}
+	<svelte:element
+		this={wrapper}
+		style={style_of(styleProp)}
+		class={'builder-blocks' + (blocks?.length ? '' : ' no-blocks') + (className ? ' ' + className : '') + ' svelteelement'}
+		builder-path={data_path()}
+		builder-parent-id={parent}
+		{...wrapper_props}
+		>{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}</svelte:element
+	>
+{/if}
 
 <style>
 	.svelteelement {
