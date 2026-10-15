@@ -16,13 +16,13 @@
 	 *
 	 * Every snippet takes (compiled, scope) and reads nothing else, so they live at module level.
 	 */
-	import { onMount, setContext } from 'svelte';
+	import { onMount } from 'svelte';
 	import { bind_animations, type Animation } from '../internal/animator.js';
 	import type { BuilderBlock } from '../types.js';
 	import type { Compiled } from '../internal/compile.js';
 	import type { Scope } from '../internal/scope.js';
 	import { component_props, wrapper_attrs } from '../internal/render.js';
-	import { SCOPE_KEY } from '../internal/keys.js';
+	import { provide_scope } from '../internal/context.js';
 	import { plain_html } from '../internal/plain.js';
 	import { block_style } from '../internal/tags.js';
 	import Block from './Block.svelte';
@@ -85,7 +85,7 @@
 	// A repeat item is its own state layer: <Blocks> inside its components must see the item's scope
 	// (the official RepeatedBlock sets a new context per item).
 	// svelte-ignore state_referenced_locally
-	if (item) setContext(SCOPE_KEY, () => scope);
+	if (item) provide_scope(() => scope);
 	// Animations bind after mount — a lifecycle hook only for a block that has them.
 	// svelte-ignore state_referenced_locally
 	if (compiled.src.animations?.length && compiled.id) {

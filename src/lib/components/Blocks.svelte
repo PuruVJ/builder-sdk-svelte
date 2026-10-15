@@ -12,6 +12,7 @@
 	import { plan_for } from '../internal/compile.js';
 	import { scope_of_store, Scope } from '../internal/scope.js';
 	import { plain_html } from '../internal/plain.js';
+	import { load_official } from '../internal/official.js';
 	import { view } from './Block.svelte';
 
 	let {
@@ -64,8 +65,7 @@
 	// No scope: rendered inside the official tree (the editor / a preview) — hand off to its Blocks.
 	let Official: Component<any> | null = $state(null);
 	if (!scope && typeof window !== 'undefined') {
-		// @ts-ignore optional peer
-		import('@builder.io/sdk-svelte/bundle/browser').then((m) => (Official = m.Blocks as never)).catch(() => {});
+		load_official().then((m) => m && (Official = m.Blocks));
 	}
 
 	function data_path(): string | undefined {
