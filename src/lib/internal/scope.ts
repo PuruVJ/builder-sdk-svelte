@@ -13,6 +13,7 @@ import type { BuilderContent, RegisteredComponents } from '../types.js';
 import type { Plan } from './compile.js';
 import { flatten_state, type EvalScope, type Globals } from './evaluate.js';
 import type { Registry } from './registry.js';
+import { serialize_including_functions } from './editor.js';
 
 export const SCOPE_BRAND = Symbol.for('puruvj.builder.scope');
 
@@ -118,7 +119,7 @@ function component_infos(components: RegisteredComponents): Record<string, unkno
 	const out: Record<string, unknown> = {};
 	for (const name in components) {
 		const { component: _c, ...info } = components[name];
-		out[name] = info;
+		out[name] = serialize_including_functions(info);
 	}
 	return out;
 }

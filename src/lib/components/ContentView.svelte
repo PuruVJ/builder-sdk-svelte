@@ -8,12 +8,12 @@
 	 * the page's one stylesheet, and the blocks from a compiled plan. `<Content>` (the variants
 	 * wrapper) renders one of these per content — and one per A/B variant during SSR.
 	 */
-	import { onMount, setContext } from 'svelte';
+	import { onMount } from 'svelte';
 	import type { BuilderContent, RegisteredComponent } from '../types.js';
 	import { create_content } from '../internal/content.js';
 	import { content_styles } from '../internal/content-styles.js';
 	import { evaluate } from '../internal/evaluate.js';
-	import { SCOPE_KEY } from '../internal/keys.js';
+	import { provide_scope } from '../internal/context.js';
 	import { is_editing, is_previewing } from '../internal/env.js';
 	import { get_cookie, interaction_properties, track } from '../internal/track.js';
 	import { script_tag, update_variant_visibility_script } from '../internal/ab-tests.js';
@@ -86,7 +86,7 @@
 		() => version,
 		() => version++
 	);
-	setContext(SCOPE_KEY, () => scope);
+	provide_scope(() => scope);
 
 	// svelte-ignore state_referenced_locally
 	const styles_html =

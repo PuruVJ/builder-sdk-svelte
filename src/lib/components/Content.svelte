@@ -20,6 +20,7 @@
 	} from '../internal/ab-tests.js';
 	import { is_editing, is_previewing } from '../internal/env.js';
 	import { plan_of } from '../internal/content.js';
+	import { load_official } from '../internal/official.js';
 	import { set_can_track } from '../internal/user-attributes.js';
 	import ContentView from './ContentView.svelte';
 
@@ -82,8 +83,7 @@
 	onMount(() => {
 		render_variants = false;
 		if (!props.isNestedRender && (is_editing() || is_previewing())) {
-			// @ts-ignore optional peer — the official SDK, loaded only inside the editor / a preview
-			import('@builder.io/sdk-svelte/bundle/browser').then((m) => (Official = m.Content as never)).catch(() => {});
+			load_official().then((m) => m && (Official = m.Content));
 		}
 	});
 </script>
