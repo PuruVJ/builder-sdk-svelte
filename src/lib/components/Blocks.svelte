@@ -4,7 +4,8 @@
 	 * their nested content with (official props and markup). It renders in the scope of the nearest
 	 * `<Content>` / repeat item, or of the `context` store it is handed.
 	 */
-	import { getContext, type Component } from 'svelte';
+	import { getContext, onMount, type Component } from 'svelte';
+	import { is_editing, is_previewing } from '../internal/env.js';
 	import type { BuilderBlock, RegisteredComponent, RegisteredComponents } from '../types.js';
 	import { kebab } from '../internal/css.js';
 	import { SCOPE_KEY } from '../internal/keys.js';
@@ -62,11 +63,15 @@
 	// svelte-ignore state_referenced_locally
 	const scope = resolve();
 
-	// No scope: rendered inside the official tree (the editor / a preview) — hand off to its Blocks.
+	// No scope in the browser. Hydrating server HTML (a component hydrated on its own, e.g. an island):
+	// adopt the server's wrapper and everything in it as is. A fresh mount (inside the official tree, in
+	// the editor or a preview): hand off to the official Blocks.
 	let Official: Component<any> | null = $state(null);
-	if (!scope && typeof window !== 'undefined') {
-		load_official().then((m) => m && (Official = m.Blocks));
-	}
+	let kept_el: HTMLElement | undefined = $state();
+	onMount(() => {
+		const hydrated = kept_el?.classList.contains('builder-blocks');
+		if (kept_el && !hydrated && (is_editing() || is_previewing())) load_official().then((m) => m && (Official = m.Blocks));
+	});
 
 	function data_path(): string | undefined {
 		if (!path) return undefined;
@@ -118,11 +123,7 @@
 	const list = $derived(blocks && scope ? segments(blocks, scope) : []);
 </script>
 
-{#if !scope}
-	{#if Official}
-		<Official {blocks} {parent} {path} {styleProp} {BlocksWrapperProps} {context} {className} {linkComponent} {registeredComponents} />
-	{/if}
-{:else}
+{#snippet tree()}
 	<svelte:element
 		this={wrapper}
 		style={style_of(styleProp)}
@@ -132,6 +133,16 @@
 		{...wrapper_props}
 		>{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}</svelte:element
 	>
+{/snippet}
+<!-- no children and no attributes: hydration adopts the server's wrapper, whatever its tag, and leaves what is in it -->
+{#snippet kept()}
+	<svelte:element this={'div'} bind:this={kept_el} />
+{/snippet}
+
+{#if Official}
+	<Official {blocks} {parent} {path} {styleProp} {BlocksWrapperProps} {context} {className} {linkComponent} {registeredComponents} />
+{:else}
+	{@render (scope ? tree : kept)()}
 {/if}
 
 <style>

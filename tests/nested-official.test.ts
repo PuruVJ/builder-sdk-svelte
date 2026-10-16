@@ -42,7 +42,8 @@ describe.skipIf(!built)('<Blocks> inside the official tree', () => {
 	for (const [sdk, port] of Object.entries(SDKS)) {
 		it(`${sdk}: the nested child renders, and stays`, async () => {
 			const page = await browser.newPage();
-			await page.goto(`http://localhost:${port}/nested-official`);
+			// (a preview link: the hand-off to the official SDK happens only in the editor or a preview)
+			await page.goto(`http://localhost:${port}/nested-official?builder.preview=page`);
 			await page.waitForSelector('[data-container] [data-child]', { timeout: 10_000 });
 			await page.waitForTimeout(1500);
 			expect(await page.locator('[data-container] [data-child]').textContent()).toBe('nested child');
