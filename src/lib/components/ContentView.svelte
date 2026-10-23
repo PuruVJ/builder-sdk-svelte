@@ -158,24 +158,45 @@
 	const hidden_props = $derived(showContent ? {} : { hidden: true, 'aria-hidden': true });
 </script>
 
-{#if ctx.content}
+{#snippet inner()}
+	{#if isSsrAbTest}
+		{@html script_tag(
+			'builderio-variant-visibility',
+			nonce,
+			update_variant_visibility_script(String(content?.testVariationId), String(content?.id))
+		)}
+	{/if}
+	{@html styles_html}
+	<Blocks blocks={ctx.content?.data?.blocks} />
+{/snippet}
+{#snippet nothing()}{/snippet}
+{#snippet wrapped()}
 	<svelte:element
 		this={contentWrapper}
-		builder-content-id={ctx.content.id}
+		builder-content-id={ctx.content?.id}
 		builder-model={model}
 		classname={'variant-' + (content?.testVariationId || content?.id)}
 		onclick={on_click}
 		{...hidden_props}
 		{...contentWrapperProps}
 	>
-		{#if isSsrAbTest}
-			{@html script_tag(
-				'builderio-variant-visibility',
-				nonce,
-				update_variant_visibility_script(String(content?.testVariationId), String(content?.id))
-			)}
-		{/if}
-		{@html styles_html}
-		<Blocks blocks={ctx.content.data?.blocks} />
+		{@render inner()}
 	</svelte:element>
+{/snippet}
+<!-- <svelte:element> re-inserts its element on hydration, disconnecting every custom element in it: the default div is a plain element, between empty renders so the server shape stays the same -->
+{#snippet div_wrapped()}
+	{@render nothing()}<div
+		builder-content-id={ctx.content?.id}
+		builder-model={model}
+		classname={'variant-' + (content?.testVariationId || content?.id)}
+		onclick={on_click}
+		{...hidden_props}
+		{...contentWrapperProps}
+	>
+		{@render inner()}
+	</div>{@render nothing()}
+{/snippet}
+
+{#if ctx.content}
+	{@render ((contentWrapper ?? 'div') === 'div' ? div_wrapped : wrapped)()}
 {/if}

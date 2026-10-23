@@ -104,10 +104,19 @@
 			{@const Link = builderLinkComponent}
 			<Link {...attrs}>{@render column_blocks(column, index)}</Link>
 		{:else}
-			<svelte:element this={column.link ? 'a' : 'div'} {...attrs}>{@render column_blocks(column, index)}</svelte:element>
+			{@render (column.link ? link_column : div_column)(attrs, column, index)}
 		{/if}
 	{/each}
 </div>
+
+{#snippet nothing()}{/snippet}
+{#snippet link_column(attrs, column, index)}
+	<svelte:element this={'a'} {...attrs}>{@render column_blocks(column, index)}</svelte:element>
+{/snippet}
+<!-- a plain element hydrates in place (<svelte:element> re-inserts, disconnecting every custom element in it); the empty renders keep the server shape -->
+{#snippet div_column(attrs, column, index)}
+	{@render nothing()}<div {...attrs}>{@render column_blocks(column, index)}</div>{@render nothing()}
+{/snippet}
 
 {#snippet column_blocks(column, index)}
 	<Blocks
