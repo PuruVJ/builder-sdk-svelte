@@ -93,6 +93,9 @@
 			: 'div'
 	);
 	const wrapper_props = $derived(BlocksWrapperProps ?? scope?.ctx.blocks_wrapper_props);
+	const wrapper_class = $derived(
+		'builder-blocks' + (blocks?.length ? '' : ' no-blocks') + (className ? ' ' + className : '') + ' svelteelement'
+	);
 
 	/**
 	 * The list as runs: a run of plain blocks (no behaviour anywhere in them, internal/plain.ts) is
@@ -124,22 +127,28 @@
 	const list = $derived(blocks && scope ? segments(blocks, scope) : []);
 </script>
 
+{#snippet contents()}{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}{/snippet}
+{#snippet nothing()}{/snippet}
 {#snippet tree()}
 	<svelte:element
 		this={wrapper}
 		style={style_of(styleProp)}
-		class={'builder-blocks' + (blocks?.length ? '' : ' no-blocks') + (className ? ' ' + className : '') + ' svelteelement'}
+		class={wrapper_class}
 		builder-path={data_path()}
 		builder-parent-id={parent}
 		{...wrapper_props}
-		>{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}</svelte:element
+		>{@render contents()}</svelte:element
 	>
+{/snippet}
+<!-- <svelte:element> re-inserts its element on hydration, disconnecting every custom element in it: the default div is a plain element, between empty renders so the server shape stays the same -->
+{#snippet div_tree()}
+	{@render nothing()}<div style={style_of(styleProp)} class={wrapper_class} builder-path={data_path()} builder-parent-id={parent} {...wrapper_props}>{@render contents()}</div>{@render nothing()}
 {/snippet}
 <!-- no children and no attributes: hydration adopts the server's wrapper, whatever its tag, and leaves what is in it -->
 {#snippet kept()}
 	<svelte:element this={'div'} bind:this={kept_el} />
 {/snippet}
-<!-- the same without re-inserting the wrapper (which disconnects every custom element in it): the server's wrapper sits between two empty comments, as {@html} hydrates -->
+<!-- the same without re-inserting the wrapper: the server's wrapper sits between two empty comments, as {@html} hydrates -->
 {#snippet adopted()}
 	{@html '<div></div>'}
 {/snippet}
@@ -147,7 +156,7 @@
 {#if Official}
 	<Official {blocks} {parent} {path} {styleProp} {BlocksWrapperProps} {context} {className} {linkComponent} {registeredComponents} />
 {:else}
-	{@render (scope ? tree : authoring ? kept : adopted)()}
+	{@render (scope ? (wrapper === 'div' ? div_tree : tree) : authoring ? kept : adopted)()}
 {/if}
 
 <style>
