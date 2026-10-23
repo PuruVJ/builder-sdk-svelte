@@ -68,9 +68,10 @@
 	// the editor or a preview): hand off to the official Blocks.
 	let Official: Component<any> | null = $state(null);
 	let kept_el: HTMLElement | undefined = $state();
+	const authoring = is_editing() || is_previewing();
 	onMount(() => {
 		const hydrated = kept_el?.classList.contains('builder-blocks');
-		if (kept_el && !hydrated && (is_editing() || is_previewing())) load_official().then((m) => m && (Official = m.Blocks));
+		if (kept_el && !hydrated && authoring) load_official().then((m) => m && (Official = m.Blocks));
 	});
 
 	function data_path(): string | undefined {
@@ -138,11 +139,15 @@
 {#snippet kept()}
 	<svelte:element this={'div'} bind:this={kept_el} />
 {/snippet}
+<!-- the same without re-inserting the wrapper (which disconnects every custom element in it): the server's wrapper sits between two empty comments, as {@html} hydrates -->
+{#snippet adopted()}
+	{@html '<div></div>'}
+{/snippet}
 
 {#if Official}
 	<Official {blocks} {parent} {path} {styleProp} {BlocksWrapperProps} {context} {className} {linkComponent} {registeredComponents} />
 {:else}
-	{@render (scope ? tree : kept)()}
+	{@render (scope ? tree : authoring ? kept : adopted)()}
 {/if}
 
 <style>

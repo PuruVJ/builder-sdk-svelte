@@ -16,6 +16,21 @@
 
 	onMount(() => {
 		const w = window as unknown as Record<string, unknown>;
+		// upgraded before the island hydrates, like a design system's elements
+		const probe = { connect: 0, disconnect: 0 };
+		w.__probe = probe;
+		if (!customElements.get('x-probe'))
+			customElements.define(
+				'x-probe',
+				class extends HTMLElement {
+					connectedCallback() {
+						probe.connect++;
+					}
+					disconnectedCallback() {
+						probe.disconnect++;
+					}
+				}
+			);
 		for (const el of document.querySelectorAll<HTMLElement>('[data-island]')) {
 			w.__before = [...el.querySelectorAll('[builder-id]')];
 			try {

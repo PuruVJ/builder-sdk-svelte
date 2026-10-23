@@ -17,7 +17,7 @@
 						name: 'Container',
 						options: {
 							content: [
-								{ '@type': ELEMENT, id: 'builder-island-text', component: { name: 'Text', options: { text: '<p data-text>nested text</p>' } } },
+								{ '@type': ELEMENT, id: 'builder-island-text', component: { name: 'Text', options: { text: '<p data-text>nested text<x-probe></x-probe></p>' } } },
 								{ '@type': ELEMENT, id: 'builder-island-leaf', component: { name: 'Leaf', options: { label: 'nested leaf' } } },
 								{
 									'@type': ELEMENT,
