@@ -39,7 +39,7 @@ describe.skipIf(!built)('a container hydrated as an island', () => {
 		for (const s of servers) s.kill();
 	});
 
-	for (const [sdk, port] of Object.entries(SDKS)) for (const wrapper of ['', 'section']) {
+	for (const [sdk, port] of Object.entries(SDKS)) for (const wrapper of ['', 'section', 'ul', 'span']) {
 		it(`${sdk}${wrapper ? ` (${wrapper} wrapper)` : ''}: the nested blocks stay, as the same nodes, and the island is live`, async () => {
 			const page = await browser.newPage();
 			const scripts: string[] = [];
@@ -61,10 +61,13 @@ describe.skipIf(!built)('a container hydrated as an island', () => {
 					same: before.every((n, i) => n === after[i] && n.isConnected),
 					text: island.querySelector('[data-text]')?.textContent,
 					leaf: island.querySelector('[data-leaf]')?.textContent,
-					deep: island.querySelector('[data-deep]')?.textContent
+					deep: island.querySelector('[data-deep]')?.textContent,
+					probe: w.__probe as { connect: number; disconnect: number }
 				};
 			});
 			expect(state.error).toBeNull();
+			// an element upgraded before hydration is never disconnected by it
+			if (sdk === 'ours') expect(state.probe).toEqual({ connect: 1, disconnect: 0 });
 			expect(state.before).toBeGreaterThanOrEqual(4);
 			expect(state.after).toBe(state.before);
 			expect(state.same).toBe(true);
