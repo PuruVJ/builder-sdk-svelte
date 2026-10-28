@@ -4,8 +4,10 @@
  */
 import { render } from 'svelte/server';
 import { Content as OfficialContent, Blocks as OfficialBlocks } from '@builder.io/sdk-svelte';
+import { Content as LatestContent, Blocks as LatestBlocks } from '@builder.io/sdk-svelte-latest';
 import { Content as OursContent, Blocks as OursBlocks } from '../src/lib/index.js';
 import StubOfficial from './stubs/StubOfficial.svelte';
+import StubLatest from './stubs/StubLatest.svelte';
 import StubOurs from './stubs/StubOurs.svelte';
 import { current } from './app/sdk.js';
 import { PLAIN } from '../src/lib/internal/plain.js';
@@ -15,7 +17,11 @@ import NoWrap from './app/NoWrap.svelte';
 import ChildrenOption from './app/ChildrenOption.svelte';
 import ContextReader from './app/ContextReader.svelte';
 
-export type Sdk = 'official' | 'ours';
+/** `official` = the pinned 5.2.0 baseline; `latest` = the newest official release. */
+export type Sdk = 'official' | 'latest' | 'ours';
+
+const CONTENT = { official: OfficialContent, latest: LatestContent, ours: OursContent };
+const BLOCKS = { official: OfficialBlocks, latest: LatestBlocks, ours: OursBlocks };
 
 const ALL_PROPS = { builderBlock: true, builderContext: true, builderComponents: true, builderLinkComponent: true };
 const BUILT_IN = new Set([
@@ -34,6 +40,7 @@ export function components_for(names: string[]): Record<Sdk, unknown[]> {
 		const custom = names.filter((n) => !BUILT_IN.has(n));
 		r = {
 			official: custom.map((name) => ({ name, component: StubOfficial, shouldReceiveBuilderProps: ALL_PROPS })),
+			latest: custom.map((name) => ({ name, component: StubLatest, shouldReceiveBuilderProps: ALL_PROPS })),
 			ours: custom.map((name) => ({ name, component: StubOurs, shouldReceiveBuilderProps: ALL_PROPS }))
 		};
 		registries.set(key, r);
@@ -42,7 +49,7 @@ export function components_for(names: string[]): Record<Sdk, unknown[]> {
 }
 
 export function render_content(sdk: Sdk, props: Record<string, unknown>): { head: string; body: string } {
-	const Content = sdk === 'official' ? OfficialContent : OursContent;
+	const Content = CONTENT[sdk];
 	// Svelte 5's render() is lazy: the work happens when `body`/`head` are read — read them here, so
 	// every caller (and every timer) measures the real render.
 	const out = render(Content as never, { props: props as never });
@@ -111,8 +118,8 @@ export interface AppRoot {
 /** A whole field page (several <Content> roots) through one SDK. */
 export function render_app_page(sdk: Sdk, roots: AppRoot[]): { head: string; body: string } {
 	current.sdk = sdk;
-	current.Blocks = sdk === 'official' ? OfficialBlocks : OursBlocks;
-	const out = render(Page as never, { props: { Content: sdk === 'official' ? OfficialContent : OursContent, roots } as never });
+	current.Blocks = BLOCKS[sdk];
+	const out = render(Page as never, { props: { Content: CONTENT[sdk], roots } as never });
 	return { head: out.head, body: out.body };
 }
 

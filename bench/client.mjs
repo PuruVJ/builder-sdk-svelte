@@ -11,7 +11,7 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const RUNS = Number(process.env.RUNS ?? 5);
 const THROTTLES = (process.env.THROTTLES ?? '1,4').split(',').map(Number);
 const fixtures = process.argv.slice(2);
-const SDKS = { official: 4401, ours: 4402 };
+const SDKS = { official: 4401, latest: 4403, ours: 4402 };
 
 function start(sdk, port) {
 	const p = spawn(process.execPath, [path.join(ROOT, `e2e/app/build-${sdk}`)], {

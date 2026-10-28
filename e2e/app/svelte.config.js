@@ -1,9 +1,9 @@
 import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
-// BUILDER_SDK=official | ours — the SAME app source, built against either SDK, each into its own
+// BUILDER_SDK=official | latest | ours — the SAME app source, built against either SDK, each into its own
 // output dir so both can be served side by side (e2e/suite/playwright.config.ts).
-const which = process.env.BUILDER_SDK === 'ours' ? 'ours' : 'official';
+const which = ['ours', 'latest'].includes(process.env.BUILDER_SDK) ? process.env.BUILDER_SDK : 'official';
 
 /** @type {import('@sveltejs/kit').Config} */
 export default {

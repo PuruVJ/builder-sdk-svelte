@@ -5,10 +5,12 @@
 	"scripts": {
 		"build:official": "BUILDER_SDK=official vite build",
 		"build:ours": "BUILDER_SDK=ours vite build",
+		"build:latest": "BUILDER_SDK=latest vite build",
 		"serve": "vite preview"
 	},
 	"dependencies": {
 		"@builder.io/sdk-svelte": "5.2.0",
+		"@builder.io/sdk-svelte-latest": "npm:@builder.io/sdk-svelte@5.4.2",
 		"@puruvj/builder-sdk-svelte": "workspace:*",
 		"@sdk/tests": "workspace:*"
 	},

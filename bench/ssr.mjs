@@ -25,7 +25,7 @@ let i = 0;
 for (const file of files) {
 	i++;
 	for (const mode of ['fresh', 'same', 'cold']) {
-		for (const sdk of ['official', 'ours']) {
+		for (const sdk of ['official', 'latest', 'ours']) {
 			try {
 				const line = execFileSync(
 					process.execPath,
@@ -44,7 +44,7 @@ for (const file of files) {
 		}
 	}
 	const pair = (m) => rows.filter((r) => r.file === file && r.mode === m);
-	const [o, u] = ['official', 'ours'].map((s) => pair('fresh').find((r) => r.sdk === s));
-	console.log(`[${i}/${files.length}] ${file}: fresh p50 ${o?.p50_ms?.toFixed(2)} → ${u?.p50_ms?.toFixed(3)} ms`);
+	const [o, l, u] = ['official', 'latest', 'ours'].map((s) => pair('fresh').find((r) => r.sdk === s));
+	console.log(`[${i}/${files.length}] ${file}: fresh p50 ${o?.p50_ms?.toFixed(2)} / ${l?.p50_ms?.toFixed(2)} / ${u?.p50_ms?.toFixed(3)} ms (official 5.2 / latest / ours)`);
 	fs.writeFileSync(out_file, JSON.stringify(rows, null, 1));
 }

@@ -36,7 +36,7 @@ if (!sdk) {
 	const rows = [];
 	for (const p of pages) {
 		const pair = {};
-		for (const s of ['official', 'ours']) {
+		for (const s of ['official', 'latest', 'ours']) {
 			const line = execFileSync(process.execPath, ['--expose-gc', import.meta.filename, s, p, '1500'], { stdio: ['ignore', 'pipe', 'ignore'] })
 				.toString()
 				.trim()
@@ -45,11 +45,12 @@ if (!sdk) {
 			pair[s] = JSON.parse(line);
 			rows.push(pair[s]);
 		}
-		const o = pair.official, u = pair.ours;
+		const o = pair.official, l = pair.latest, u = pair.ours;
 		console.log(
-			`${p.padEnd(52)} ${(o.bytes_in / 1024) | 0}K  p50 ${o.p50_ms.toFixed(2)} → ${u.p50_ms.toFixed(3)} ms (${(o.p50_ms / u.p50_ms).toFixed(0)}x)  ` +
-				`cpu ${o.cpu_ms.toFixed(2)} → ${u.cpu_ms.toFixed(3)}  alloc ${(o.alloc_bytes / 1e6).toFixed(1)} → ${(u.alloc_bytes / 1e6).toFixed(2)} MB  ` +
-				`gc ${o.gc_ms.toFixed(2)} → ${u.gc_ms.toFixed(3)}  html ${o.html_bytes} → ${u.html_bytes}`
+			`${p.padEnd(52)} ${(o.bytes_in / 1024) | 0}K  p50 ${o.p50_ms.toFixed(2)} / ${l.p50_ms.toFixed(2)} / ${u.p50_ms.toFixed(3)} ms  ` +
+				`cpu ${o.cpu_ms.toFixed(2)} / ${l.cpu_ms.toFixed(2)} / ${u.cpu_ms.toFixed(3)}  ` +
+				`alloc ${(o.alloc_bytes / 1e6).toFixed(1)} / ${(l.alloc_bytes / 1e6).toFixed(1)} / ${(u.alloc_bytes / 1e6).toFixed(2)} MB  ` +
+				`html ${o.html_bytes} / ${l.html_bytes} / ${u.html_bytes}  (official 5.2 / latest / ours)`
 		);
 	}
 	fs.mkdirSync(path.join(ROOT, 'bench/results'), { recursive: true });
