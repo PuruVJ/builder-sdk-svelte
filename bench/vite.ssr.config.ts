@@ -12,6 +12,6 @@ export default defineConfig({
 		target: 'node22',
 		rollupOptions: { output: { format: 'es', entryFileNames: 'entry.js' } }
 	},
-	ssr: { noExternal: ['@builder.io/sdk-svelte'] },
+	ssr: { noExternal: ['@builder.io/sdk-svelte', '@builder.io/sdk-svelte-latest'] },
 	logLevel: 'warn'
 });

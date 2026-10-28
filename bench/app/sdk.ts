@@ -5,7 +5,7 @@
  * no component). Each component renders the `<Blocks>` of whichever SDK is rendering — set here
  * right before each synchronous server render.
  */
-export const current: { Blocks: unknown; sdk: 'official' | 'ours' } = { Blocks: null, sdk: 'ours' };
+export const current: { Blocks: unknown; sdk: 'official' | 'latest' | 'ours' } = { Blocks: null, sdk: 'ours' };
 
 const ELEMENT = '@builder.io/sdk:Element';
 const SKIP = new Set(['builderBlock', 'builderContext', 'builderComponents', 'builderLinkComponent', 'attributes', '$$slots', '$$scope', '$$events', '$$legacy']);

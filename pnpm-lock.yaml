@@ -11,6 +11,9 @@ importers:
       '@builder.io/sdk-svelte':
         specifier: 5.2.0
         version: 5.2.0(svelte@5.57.1)
+      '@builder.io/sdk-svelte-latest':
+        specifier: npm:@builder.io/sdk-svelte@5.4.2
+        version: '@builder.io/sdk-svelte@5.4.2(svelte@5.57.1)'
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.2.4
         version: 6.2.4(svelte@5.57.1)(vite@7.3.6(@types/node@22.20.4))
@@ -50,6 +53,9 @@ importers:
       '@builder.io/sdk-svelte':
         specifier: 5.2.0
         version: 5.2.0(svelte@5.57.1)
+      '@builder.io/sdk-svelte-latest':
+        specifier: npm:@builder.io/sdk-svelte@5.4.2
+        version: '@builder.io/sdk-svelte@5.4.2(svelte@5.57.1)'
       '@puruvj/builder-sdk-svelte':
         specifier: workspace:*
         version: link:../..
@@ -99,6 +105,11 @@ packages:
 
   '@builder.io/sdk-svelte@5.2.0':
     resolution: {integrity: sha512-YlSAj3daJWSrzHtDS0pX8zElN9937V6DgAFpdtU+6LZumiu0a+wkggyuRjeull5qyKSB1lmDLUGkSQSrijE00Q==}
+    peerDependencies:
+      svelte: ^4.1.2
+
+  '@builder.io/sdk-svelte@5.4.2':
+    resolution: {integrity: sha512-nAY1T75WIyCZTIdSB0WvFtrVZPNnIhqFs6t/YFT+rMjgE7eqYBvn1GSj80JjeQd+5fXeKRKKFBLlG4+u4Wjd4w==}
     peerDependencies:
       svelte: ^4.1.2
 
@@ -1680,6 +1691,11 @@ packages:
 snapshots:
 
   '@builder.io/sdk-svelte@5.2.0(svelte@5.57.1)':
+    dependencies:
+      isolated-vm: 6.2.0
+      svelte: 5.57.1
+
+  '@builder.io/sdk-svelte@5.4.2(svelte@5.57.1)':
     dependencies:
       isolated-vm: 6.2.0
       svelte: 5.57.1
