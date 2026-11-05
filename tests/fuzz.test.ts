@@ -23,6 +23,7 @@ const N = Number(process.env.FUZZ_SEEDS ?? 300);
 const seeds = ONE !== undefined ? [Number(ONE)] : Array.from({ length: N }, (_, i) => i + 1);
 
 const official_crashes: Array<[number, string]> = [];
+const crash_repro = new Map<string, { spec: Spec; ours: string }>();
 const skipped: Array<[number, string]> = [];
 
 beforeAll(() => {
@@ -42,10 +43,15 @@ afterAll(() => {
 		out.push(`[fuzz] the official SDK threw on ${official_crashes.length} seed(s):`);
 		const by_msg = new Map<string, number[]>();
 		for (const [seed, msg] of official_crashes) by_msg.set(msg, [...(by_msg.get(msg) ?? []), seed]);
-		for (const [msg, s] of by_msg) out.push(`  ${msg}  (seeds ${s.slice(0, 8).join(', ')}${s.length > 8 ? ', …' : ''})`);
+		for (const [msg, s] of by_msg) {
+			const repro = crash_repro.get(msg)!;
+			out.push(`  ${msg}  (seeds ${s.slice(0, 8).join(', ')}${s.length > 8 ? ', …' : ''})`);
+			out.push(`    minimal: ${JSON.stringify(repro.spec)}`);
+			out.push(`    ours on it: ${repro.ours}`);
+		}
 	}
 	if (skipped.length) {
-		out.push(`[fuzz] ${skipped.length} seed(s) hit a known official-SDK divergence (tests/fuzz/known.ts):`);
+		out.push(`[fuzz] ${skipped.length} seed(s) passed only modulo a known difference (tests/fuzz/known.ts, check.ts):`);
 		const by = new Map<string, number[]>();
 		for (const [seed, why] of skipped) by.set(why, [...(by.get(why) ?? []), seed]);
 		for (const [why, s] of by) out.push(`  ${why}  (seeds ${s.slice(0, 8).join(', ')}${s.length > 8 ? ', …' : ''})`);
@@ -63,10 +69,17 @@ describe('fuzz: both SDKs render random content the same', () => {
 			const spec = neutralize(generate(seed));
 			const result = check(spec);
 			if (result.official_error !== undefined) {
-				official_crashes.push([seed, result.official_error]);
+				const msg = result.official_error;
+				official_crashes.push([seed, msg]);
+				// The first seed of each crash: shrunk, so the summary shows what makes the official SDK throw.
+				if (!crash_repro.has(msg)) {
+					const min = shrink(spec, (s) => check(s).official_error === msg, 1500);
+					crash_repro.set(msg, { spec: min, ours: check(min).ours_error ?? 'renders' });
+				}
 				return;
 			}
 			const failure = result.failure;
+			if (result.note) skipped.push([seed, result.note]);
 			if (!failure) return;
 			const why = known_official(spec, failure);
 			if (why) {

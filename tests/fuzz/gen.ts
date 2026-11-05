@@ -142,7 +142,7 @@ export function generate(seed: number): Spec {
 		const n = budget > 0 ? r.int(max + 1) : 0;
 		const out: Json[] = [];
 		for (let i = 0; i < n; i++) out.push(block(depth + 1));
-		if (r.chance(0.01)) out.push(null as unknown as Json); // a null in a block list
+		if (r.chance(0.002)) out.push(null as unknown as Json); // a null in a block list (both SDKs throw: kept rare)
 		return out;
 	};
 
@@ -211,7 +211,7 @@ export function generate(seed: number): Spec {
 			}
 			case 10:
 				return o('Builder: Tabs', {
-					tabs: Array.from({ length: r.int(3) }, () => ({ label: blocks(depth, 2), content: blocks(depth, 2) })),
+					tabs: Array.from({ length: r.chance(0.05) ? 0 : 1 + r.int(2) }, () => ({ label: blocks(depth, 2), content: blocks(depth, 2) })),
 					...(r.chance(0.5) ? { defaultActiveTab: r.int(3) } : {}),
 					...(r.chance(0.3) ? { activeTabStyle: { color: 'red' } } : {}),
 					...(r.chance(0.3) ? { collapsible: r.chance(0.5) } : {}),

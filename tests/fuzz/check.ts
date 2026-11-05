@@ -12,6 +12,11 @@ const ELEMENT = '@builder.io/sdk:Element';
 const BUILDER_ID_RE = /builder-id="([^"]+)"/g;
 const CLASS_ID_RE = /\.(builder-[a-z0-9-]+?)(?=[\s{:.>,]|-breakpoints)/g;
 const COMMENT_RE = /<!--[^]*?-->/g;
+const ANCHOR_OPEN_RE = /<a(?=[\s>])/g;
+const ANCHOR_CLOSE_RE = /<\/a>/g;
+
+export const NESTED_LINKS =
+	'a link nested in a link: invalid HTML, which the parser repairs around whitespace text; the SDKs place whitespace differently (same tree as written)';
 
 export type Kind = 'ours-throws' | 'tree' | 'css-missing' | 'css-extra' | 'plain' | 'plain-throws';
 export interface Failure {
@@ -22,6 +27,16 @@ export interface Result {
 	failure: Failure | null;
 	/** The official render threw (nothing to compare against): its message. */
 	official_error?: string;
+	/** ...and ours on the same spec (it may throw too, or render). */
+	ours_error?: string;
+	/** Passed only modulo a known difference (tests/fuzz/known.ts): which. */
+	note?: string;
+}
+
+/** Anchors renamed, so the parser keeps the tree as written: no "adoption agency" repair of a link
+ *  nested in a link (invalid HTML, which a block with href inside another one produces). */
+function unanchor(html: string): string {
+	return html.replace(ANCHOR_OPEN_RE, '<x-a').replace(ANCHOR_CLOSE_RE, '</x-a>');
 }
 
 export function names_in(v: unknown): string[] {
@@ -65,8 +80,14 @@ export function check(spec: Spec): Result {
 	try {
 		official_html = render('official', spec);
 	} catch (e) {
-		// No reference to compare against; ours must still not take the process down (it may throw too).
-		return { failure: null, official_error: String((e as Error)?.message ?? e).split('\n')[0] };
+		// No reference to compare against: recorded, not failed (ours may throw too, or render).
+		let ours_error: string | undefined;
+		try {
+			render('ours', spec);
+		} catch (e2) {
+			ours_error = String((e2 as Error)?.message ?? e2).split('\n')[0];
+		}
+		return { failure: null, official_error: String((e as Error)?.message ?? e).split('\n')[0], ours_error };
 	}
 	let ours_html: string;
 	try {
@@ -77,7 +98,15 @@ export function check(spec: Spec): Result {
 	}
 	const official = normalize(official_html);
 	const ours = normalize(ours_html);
-	if (ours.tree !== official.tree) return { failure: { kind: 'tree', detail: first_diff(official.tree, ours.tree) } };
+	let note: string | undefined;
+	if (ours.tree !== official.tree) {
+		// A link inside a link: the parser closes and re-opens the outer <a> around every text node it
+		// meets, whitespace included, and the SDKs place whitespace text differently. Compared as
+		// written (anchors renamed), the trees must match.
+		if (normalize(unanchor(ours_html)).tree !== normalize(unanchor(official_html)).tree)
+			return { failure: { kind: 'tree', detail: first_diff(official.tree, ours.tree) } };
+		note = NESTED_LINKS;
+	}
 	const missing = official.css.filter((r) => !ours.css.includes(r));
 	if (missing.length) return { failure: { kind: 'css-missing', detail: missing.slice(0, 3).join('\n') } };
 	const rendered_ids = new Set([...ours.tree.matchAll(BUILDER_ID_RE)].map((m) => m[1]));
@@ -102,7 +131,7 @@ export function check(spec: Spec): Result {
 		while (i < a.length && a[i] === b[i]) i++;
 		return { failure: { kind: 'plain', detail: `at ${i}\n--- plain on\n${a.slice(Math.max(0, i - 120), i + 120)}\n--- plain off\n${b.slice(Math.max(0, i - 120), i + 120)}` } };
 	}
-	return { failure: null };
+	return { failure: null, note };
 }
 
 // ── shrinking ───────────────────────────────────────────────────────────────────────────────────
