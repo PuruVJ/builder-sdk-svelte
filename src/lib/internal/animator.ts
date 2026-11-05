@@ -74,7 +74,10 @@ export function trigger_animation(a: Animation): void {
 	}
 }
 
-function bind_scroll_in_view(a: Animation): void {
+/** Returns the unbinding: the document scroll listeners it added (a block unmounted before it ever
+ * scrolled into view — a client-side navigation away — must not leave them behind). */
+function bind_scroll_in_view(a: Animation): () => void {
+	const unbind: Array<() => void> = [];
 	for (const el of elements_of(a)) {
 		augment(a, el);
 		let triggered = false;
@@ -91,7 +94,8 @@ function bind_scroll_in_view(a: Animation): void {
 				pending = true;
 				setTimeout(() => {
 					assign(el.style, a.steps[1].styles);
-					if (!a.repeat) document.removeEventListener('scroll', on_scroll);
+					// (with `capture`, as added — the official call omits it and never removes the listener)
+					if (!a.repeat) document.removeEventListener('scroll', on_scroll, { capture: true });
 					setTimeout(
 						() => {
 							pending = false;
@@ -115,13 +119,22 @@ function bind_scroll_in_view(a: Animation): void {
 			if (a.delay) el.style.transitionDelay = a.delay + 's';
 		});
 		document.addEventListener('scroll', on_scroll, { capture: true, passive: true });
+		unbind.push(() => document.removeEventListener('scroll', on_scroll, { capture: true }));
 		on_scroll_now();
 	}
+	return () => {
+		for (const u of unbind) u();
+	};
 }
 
-export function bind_animations(animations: Animation[]): void {
+/** Binds a block's animations (after mount); returns the unbinding, for its unmount. */
+export function bind_animations(animations: Animation[]): () => void {
+	const unbind: Array<() => void> = [];
 	for (const a of animations) {
 		if (a.trigger === 'pageLoad') trigger_animation(a);
-		else if (a.trigger === 'scrollInView') bind_scroll_in_view(a);
+		else if (a.trigger === 'scrollInView') unbind.push(bind_scroll_in_view(a));
 	}
+	return () => {
+		for (const u of unbind) u();
+	};
 }
