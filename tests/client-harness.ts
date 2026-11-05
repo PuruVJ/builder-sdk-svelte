@@ -183,6 +183,21 @@ export async function fresh(servers: Servers, options: Parameters<Browser['newCo
 	return { context, page, problems };
 }
 
+/** A fresh context + page of one SDK's app at `route`, off the network (`offline`), hydrated. */
+export async function open_page(
+	servers: Servers,
+	sdk: Sdk,
+	route: string,
+	{ context_options, before }: { context_options?: Parameters<Browser['newContext']>[0]; before?: (context: BrowserContext, page: Page) => Promise<void> } = {}
+) {
+	const { context, page, problems } = await fresh(servers, context_options);
+	const requests = await offline(context);
+	await before?.(context, page);
+	await page.goto(servers.origin(sdk) + route);
+	await hydrated(page);
+	return { context, page, problems, requests };
+}
+
 /** Waits until the page's SvelteKit app has started (hydrated, its onMount run). */
 export async function hydrated(page: Page | Frame) {
 	// `load` waits for the route's modulepreloads; SvelteKit's start() then stamps history.state just
