@@ -22,6 +22,7 @@
 	import { is_authoring } from '../internal/live.js';
 	import { set_can_track } from '../internal/user-attributes.js';
 	import ContentView from './ContentView.svelte';
+	import Run from './Run.svelte';
 
 	let props: {
 		content?: BuilderContent | null;
@@ -71,7 +72,8 @@
 	let live = $state(props.startLive === true);
 
 	// a new content object (even with the same id), another winning variation, or going live
-	// re-renders the view
+	// re-renders the view — except once live (the editor, a preview): there a new content object is
+	// merged into the mounted view (official EnableEditor `mergeNewContent`), so nothing remounts
 	let view_key = {};
 	let keyed_content: unknown = undefined;
 	let keyed_variation: unknown = undefined;
@@ -80,12 +82,11 @@
 	const content_key = $derived.by(() => {
 		const c = props.content;
 		const v = default_content?.testVariationId;
-		if (c !== keyed_content || v !== keyed_variation || live !== keyed_live) {
-			keyed_content = c;
-			keyed_variation = v;
-			keyed_live = live;
-			view_key = {};
-		}
+		const new_content = c !== keyed_content && !(live && keyed_live);
+		if (new_content || v !== keyed_variation || live !== keyed_live) view_key = {};
+		keyed_content = c;
+		keyed_variation = v;
+		keyed_live = live;
 		return view_key;
 	});
 
@@ -93,6 +94,8 @@
 		const { startLive: _, ...rest } = props;
 		return rest;
 	});
+
+	let view: { update_content(next: BuilderContent | null | undefined): void } | undefined = $state.raw();
 
 	onMount(() => {
 		render_variants = false;
@@ -125,5 +128,6 @@
 	{/each}
 {/if}
 {#key content_key}
-	<ContentView {...view_props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} />
+	<ContentView bind:this={view} {...view_props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} />
 {/key}
+{#if live}{#key props.content}<Run run={() => view?.update_content(default_content)} />{/key}{/if}

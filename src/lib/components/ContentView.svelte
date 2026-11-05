@@ -135,6 +135,12 @@
 		flusher.schedule();
 	}
 
+	/** Live: the app handed <Content> a new content object (a refetch) — merged in (official
+	 *  EnableEditor `mergeNewContent`), so nothing remounts and the editor's edits stay under it. */
+	export function update_content(next: BuilderContent | null | undefined) {
+		if (live && next) merge_new_content(next);
+	}
+
 	/** official `emitStateUpdate`: the editor's state panel follows root state (editing only). */
 	let last_state: string | undefined;
 	function emit_state() {
