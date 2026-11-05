@@ -8,7 +8,7 @@
  * Each info is built by a function (called once, by defaults.ts on the first registry build):
  * importing this module runs nothing.
  */
-import type { ComponentInfo } from '../types.js';
+import type { ComponentInfo } from '../official/types/components.js';
 
 /** official `constants/file-types.ts` */
 const IMAGE_FILE_TYPES = ['jpeg', 'jpg', 'png', 'svg', 'webp', 'gif', 'jfif', 'pjpeg', 'pjp', 'apng', 'avif', 'tif', 'tiff', 'heif', 'bmp', 'eps', 'raw', 'cr2', 'nef', 'orf', 'sr2', 'psd', 'heic', 'dib', 'ai'];

@@ -1,0 +1,15 @@
+// Vendored from @builder.io/sdk-svelte@5.2.0 src/blocks/columns/columns.types.ts (MIT) by scripts/vendor-official-types.mjs — do not edit.
+import type { BuilderBlock } from '../../types/builder-block.js';
+import type { BuilderComponentsProp, BuilderDataProps, BuilderLinkComponentProp } from '../../types/builder-props.js';
+export type Column = {
+  blocks: BuilderBlock[];
+  width?: number;
+  link?: string;
+};
+type StackColumnsAt = 'tablet' | 'mobile' | 'never';
+export interface ColumnProps extends BuilderComponentsProp, BuilderLinkComponentProp, BuilderDataProps {
+  columns?: Column[];
+  space?: number;
+  stackColumnsAt?: StackColumnsAt;
+  reverseColumnsWhenStacked?: boolean;
+}

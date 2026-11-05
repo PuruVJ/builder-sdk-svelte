@@ -66,7 +66,7 @@ export interface PlanOptions {
 	registry: Registry;
 	model: string;
 	locale: string | undefined;
-	breakpoints: { xsmall?: number; small?: number; medium?: number } | undefined;
+	breakpoints: { xsmall?: number; small?: number; medium?: number } | null | undefined;
 	/**
 	 * The editor / preview leg (internal/live.ts): the content changes under a mounted tree. The plan
 	 * outlives every edit (an untouched block stays a cache hit), so it keeps no page-wide shape: no

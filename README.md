@@ -127,7 +127,22 @@ It is the same API. Swap the import:
 <Content model="page" {content} apiKey={PUBLIC_BUILDER_KEY} customComponents={components} />
 ```
 
-Or leave your imports alone and alias the package in `vite.config.js`:
+Or leave every import alone and install it **under the official name**. Your code, including type
+imports from the official deep paths (`@builder.io/sdk-svelte/src/types/builder-block` and the
+other official type modules), keeps working unchanged:
+
+```jsonc
+// package.json
+"dependencies": {
+  "@builder.io/sdk-svelte": "npm:@puruvj/builder-sdk-svelte@^0.0.10"
+}
+```
+
+The exported types are the official SDK's own declarations, so `svelte-check` sees exactly what it
+saw before (`tests/types-compat.test.ts` checks this with both `bundler` and `node10` resolution).
+
+Or alias the package in `vite.config.js` (runtime imports only: deep type imports then need the
+official package installed):
 
 ```js
 export default defineConfig({

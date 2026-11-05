@@ -25,3 +25,4 @@ fixtures/probe/
 # profiles
 bench/prof/
 .check-bundle/
+.check-types/

@@ -1,0 +1,2 @@
+// Vendored from @builder.io/sdk-svelte@5.2.0 src/types/deep-partial.ts (MIT) by scripts/vendor-official-types.mjs — do not edit.
+export type DeepPartial<T> = { [P in keyof T]?: T[P] extends Array<infer U> ? Array<DeepPartial<U>> : T[P] extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>> : DeepPartial<T[P]> }
