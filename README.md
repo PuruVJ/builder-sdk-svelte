@@ -9,8 +9,9 @@ suite: 10 more tests pass than with the official SDK, and no test that passes th
 Server rendering is **170–300× faster** on production-shaped pages, with **~99.9% less memory
 churn**. In the browser, hydration is **3–6× faster** with no main-thread blocking.
 
-> **Status: experimental.** Built against `@builder.io/sdk-svelte@5.2.0` and Svelte 5. Visual
-> editing and preview are handed to the official SDK (see [Editor](#editor-and-preview)).
+> **Status: experimental.** Built against `@builder.io/sdk-svelte@5.2.0` and Svelte 5. It does not
+> depend on the official SDK at all, the visual editor and preview included (see
+> [Editor](#editor-and-preview)).
 
 ```sh
 npm install @puruvj/builder-sdk-svelte
@@ -126,8 +127,7 @@ It is the same API. Swap the import:
 <Content model="page" {content} apiKey={PUBLIC_BUILDER_KEY} customComponents={components} />
 ```
 
-Or leave your imports alone and alias the package in `vite.config.js`. The alias is **exact-name**,
-so `@builder.io/sdk-svelte/bundle/browser` still resolves to the official SDK for the editor:
+Or leave your imports alone and alias the package in `vite.config.js`:
 
 ```js
 export default defineConfig({
@@ -138,16 +138,15 @@ export default defineConfig({
 });
 ```
 
-Keep `@builder.io/sdk-svelte` installed too if you use the Builder editor or preview: it is an
-optional peer dependency, loaded only inside the editor.
+You can uninstall `@builder.io/sdk-svelte`: nothing here loads it, in the editor or anywhere else.
 
 ### What's exported
 
 `Content`, `Blocks`, the built-in blocks (`Button`, `Columns`, `Fragment`, `Image`, `Section`,
 `Symbol`, `Text`), `isEditing`, `isPreviewing`, `fetchOneEntry`, `fetchEntries`,
 `getBuilderSearchParams`, `setClientUserAttributes`, `track`, `_processContentResult`, the
-registration no-ops (`register`, `registerAction`, `setEditorSettings`, `subscribeToEditor`) and the
-types. It also includes built-in Accordion, Tabs, Video, Form (+ inputs), Custom Code, Embed,
+editor functions (`register`, `registerAction`, `setEditorSettings`, `subscribeToEditor`,
+`createRegisterComponentMessage`) and the official types. It also includes built-in Accordion, Tabs, Video, Form (+ inputs), Custom Code, Embed,
 Raw:Img, RawText and PersonalizationContainer, plus SSR A/B tests with the official inline variant
 scripts.
 
@@ -208,10 +207,20 @@ needs them.
 
 ### Editor and preview
 
-When a page is opened inside the Builder editor or in preview, `<Content>` loads the official SDK
-(`@builder.io/sdk-svelte/bundle/browser`, an optional peer dependency) and hands it the content. Live
-editing therefore behaves exactly like the official SDK. Normal visitors never download it. An
-in-house editor bridge is planned.
+Inside the Builder editor (or a preview link), `<Content>` speaks the editor's protocol itself: the
+same messages as the official SDK (`sdkInfo`, the component registrations, content and state
+updates, breakpoints, animations, `evaluate`, trusted hosts), and the preview fetch. The page still
+hydrates the server's static HTML; only after mount does the view re-render live.
+
+An edit costs what changed, not the page. The editor re-sends the whole content on every keystroke,
+and the official SDK re-processes every block for each one, which is what freezes the editor on
+pages with hundreds of components. Here the new content shares every unchanged part with what is on
+screen, the compiled blocks survive across edits, lists are keyed by block id, and a burst of
+messages applies once per frame. On a page of 300 custom components, editing one Text block gives
+no component new props and remounts none (`tests/editor-perf.test.ts`). A component that throws
+while being edited empties only its own block, and is tried again on its next edit.
+
+Normal visitors run none of this.
 
 ## Development
 
