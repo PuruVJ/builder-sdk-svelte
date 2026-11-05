@@ -18,8 +18,7 @@
 	import { evaluate } from '../internal/evaluate.js';
 	import { provide_scope } from '../internal/context.js';
 	import { is_editing, is_previewing } from '../internal/env.js';
-	import { editor_listener, post_component_infos, setup_browser_for_editing } from '../internal/editor.js';
-	import { coalesce, is_authoring, merge_content, reconcile } from '../internal/live.js';
+	import { coalesce, is_authoring, load_bridge, merge_content, reconcile } from '../internal/live.js';
 	import { trigger_animation, type Animation } from '../internal/animator.js';
 	import { fetch_one_entry } from '../internal/fetch.js';
 	import { get_cookie, interaction_properties, track } from '../internal/track.js';
@@ -152,16 +151,15 @@
 		window.dispatchEvent(new CustomEvent('builder:component:stateChange', { detail: { state: JSON.parse(json), ref: { name: model } } }));
 	}
 
-	// svelte-ignore state_referenced_locally
-	const on_message = editor_listener(model, trustedHosts, {
-		contentUpdate: (update) => merge_new_content(update),
-		stateUpdate: (state) => ctx.root_set_state({ ...ctx.root, ...state }),
-		animation: (animation) => trigger_animation(animation as unknown as Animation),
-		configureSdk: ({ breakpoints, contentId }) => {
+	const callbacks = {
+		contentUpdate: (update: BuilderContent) => merge_new_content(update),
+		stateUpdate: (state: Record<string, unknown>) => ctx.root_set_state({ ...ctx.root, ...state }),
+		animation: (animation: Record<string, unknown>) => trigger_animation(animation as unknown as Animation),
+		configureSdk: ({ breakpoints, contentId }: { breakpoints?: NonNullable<BuilderContent['meta']>['breakpoints']; contentId?: string }) => {
 			if (!contentId || contentId !== live_content?.id) return;
 			if (breakpoints) merge_new_content({ meta: { breakpoints } });
 		}
-	});
+	};
 
 	/** official EnableEditor preview leg: a preview link of THIS content (or a Builder Studio symbol) renders the draft. */
 	function preview() {
@@ -209,27 +207,35 @@
 
 	function start_live(): () => void {
 		const editing = is_editing();
-		const listening = editing && !isNestedRender;
-		if (listening) {
-			window.addEventListener('message', on_message);
-			setup_browser_for_editing({
-				...(locale ? { locale } : {}),
-				...(enrich ? { enrich } : {}),
-				...(trustedHosts ? { trustedHosts } : {}),
-				modelName: model ?? '',
-				apiKey: apiKey as string
+		let stopped = false;
+		let stop_listening: (() => void) | undefined;
+		if (editing && !isNestedRender) {
+			// (the bridge is its own chunk: a visitor's page never downloads it)
+			load_bridge().then((bridge) => {
+				if (stopped) return;
+				const on_message = bridge.editor_listener(model, trustedHosts, callbacks);
+				window.addEventListener('message', on_message);
+				bridge.setup_browser_for_editing({
+					...(locale ? { locale } : {}),
+					...(enrich ? { enrich } : {}),
+					...(trustedHosts ? { trustedHosts } : {}),
+					modelName: model ?? '',
+					apiKey: apiKey as string
+				});
+				bridge.post_component_infos(ctx.registry.by_name.values(), model);
+				window.addEventListener('builder:component:stateChangeListenerActivated', emit_state);
+				stop_listening = () => {
+					window.removeEventListener('message', on_message);
+					window.removeEventListener('builder:component:stateChangeListenerActivated', emit_state);
+				};
 			});
-			post_component_infos(ctx.registry.by_name.values(), model);
-			window.addEventListener('builder:component:stateChangeListenerActivated', emit_state);
 		}
 		emit_state();
 		if (is_previewing() && !editing) preview();
 		return () => {
+			stopped = true;
 			flusher.cancel();
-			if (listening) {
-				window.removeEventListener('message', on_message);
-				window.removeEventListener('builder:component:stateChangeListenerActivated', emit_state);
-			}
+			stop_listening?.();
 		};
 	}
 

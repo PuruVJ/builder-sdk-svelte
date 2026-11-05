@@ -155,3 +155,11 @@ export function coalesce(flush: () => void): { schedule(): void; cancel(): void 
  * up, so "the page has started" says nothing about whether a component is hydrating.
  */
 export const is_authoring = (): boolean => is_browser() && (is_editing() || is_previewing());
+
+let bridge: Promise<typeof import('./bridge.js')> | undefined;
+/**
+ * The editor bridge chunk (internal/bridge.ts), loaded once. One shared promise: every <Content>
+ * waiting on it continues in the order it asked, so the editor hears of them in page order (header
+ * before page), as with the official SDK.
+ */
+export const load_bridge = (): Promise<typeof import('./bridge.js')> => (bridge ??= import('./bridge.js'));

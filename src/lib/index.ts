@@ -11,9 +11,9 @@ import {
 	create_register_component_message,
 	register as register_editor,
 	register_action,
-	set_editor_settings,
-	subscribe_to_editor
+	set_editor_settings
 } from './internal/editor.js';
+import { load_bridge } from './internal/live.js';
 import { track as track_event, type TrackEvent } from './internal/track.js';
 import { set_user_attributes } from './internal/user-attributes.js';
 
@@ -87,5 +87,20 @@ export const setEditorSettings = set_editor_settings;
 export const createRegisterComponentMessage = create_register_component_message;
 
 /** official `subscribeToEditor`: content updates of `model` from the editor; call the returned function to stop. */
-export const subscribeToEditor = subscribe_to_editor;
+export function subscribeToEditor(args: { model: string; apiKey: string; callback: (content: BuilderContent) => void; trustedHosts?: string[] }): () => void {
+	if (!is_browser()) {
+		console.warn('[Builder.io]: `subscribeToEditor` only works in the browser. It currently seems to be running on the server.');
+		return () => {};
+	}
+	// (the bridge is its own chunk: loaded only by a page that subscribes)
+	let stop: (() => void) | undefined;
+	let stopped = false;
+	load_bridge().then((bridge) => {
+		if (!stopped) stop = bridge.subscribe_to_editor(args);
+	});
+	return () => {
+		stopped = true;
+		stop?.();
+	};
+}
 export type { GetContentOptions };

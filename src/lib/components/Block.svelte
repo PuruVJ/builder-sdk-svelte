@@ -21,7 +21,7 @@
 	import type { BuilderBlock } from '../types.js';
 	import type { Compiled } from '../internal/compile.js';
 	import type { Scope } from '../internal/scope.js';
-	import { component_props, wrapper_attrs } from '../internal/render.js';
+	import { component_props, process, wrapper_attrs } from '../internal/render.js';
 	import { provide_scope } from '../internal/context.js';
 	import { plain_html } from '../internal/plain.js';
 	import { block_style } from '../internal/tags.js';
@@ -72,8 +72,17 @@
 		return block_style(scope.ctx.nonce, c.css);
 	}
 
-	function entry_of(c: Compiled) {
+	function entry_of(c: Compiled, scope: Scope) {
+		// Live (the editor): a block keeps ONE structure whatever its bindings, so gaining or losing a
+		// binding never remounts what is inside it. Only a repeat (or animations, bound at mount) needs
+		// a <Block> of its own.
+		if (scope.ctx.plan.live) return c.repeat || c.src.animations?.length ? component_entry_s : live_entry_s;
 		return needs_component(c) ? component_entry_s : static_entry_s;
+	}
+
+	/** Live: the block with its bindings applied (again when root state changes). */
+	function live_of(c: Compiled, scope: Scope): Compiled {
+		return c.bindings ? (scope.ctx.version(), process(c, scope)) : c;
 	}
 </script>
 
@@ -107,7 +116,11 @@
 		onMount(() => bind_animations(list.map((a) => ({ ...a, elementId: id }))));
 	}
 
+	// (live: bindings applied in place — see entry_of)
+	const shown = $derived(bound ?? (scope.ctx.plan.live && !compiled.repeat ? live_of(compiled, scope) : compiled));
+
 	function pick(c: Compiled) {
+		if (!bound && scope.ctx.plan.live) return compiled.repeat ? repeat_s : shape_of(c, scope);
 		if (!bound) {
 			if (compiled.repeat) return repeat_s;
 			if (compiled.bindings) return bound_s;
@@ -117,23 +130,31 @@
 	}
 	/** The block's own style tag when its rules are not already in the content's one sheet. */
 	function own_css(c: Compiled): string {
+		if (!bound && scope.ctx.plan.live) return !compiled.repeat && c.visible && c.css ? block_style(scope.ctx.nonce, c.css) : '';
 		if (!bound && (compiled.repeat || compiled.bindings)) return '';
 		if (!bound) return static_css(c, scope);
 		return c.visible && c.css ? block_style(scope.ctx.nonce, c.css) : '';
 	}
 </script>
 
-{@html own_css(bound ?? compiled)}
-{@render pick(bound ?? compiled)?.(bound ?? compiled, scope)}
+{@html own_css(shown)}
+{@render pick(shown)?.(shown, scope)}
 
 <!-- A block in a list: static ones render right here, the rest as a <Block> instance. -->
 {#snippet view(block, scope)}
 	{@const c = scope.ctx.plan.compile(block)}
-	{@render entry_of(c)(c, scope)}
+	{@render entry_of(c, scope)(c, scope)}
 {/snippet}
 
 {#snippet component_entry_s(c, scope)}
 	<Block block={c.src} {scope} />
+{/snippet}
+
+<!-- live (entry_of): the same, with the block's bindings applied in place -->
+{#snippet live_entry_s(c, scope)}
+	{@const b = live_of(c, scope)}
+	{@html b.visible && b.css ? block_style(scope.ctx.nonce, b.css) : ''}
+	{@render shape_of(b, scope)?.(b, scope)}
 {/snippet}
 
 <!-- (the same output as a <Block>: its style tag, one space, its shape) -->
