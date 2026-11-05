@@ -232,18 +232,19 @@ let any_no_sheet = false;
 /**
  * The blocks of inline symbols whose breakpoints differ from this content's. A symbol's blocks
  * render in the symbol's own <Content>, styled by ITS sheet with ITS breakpoints: rules for them
- * here would use the wrong media queries (and reach them, as they share the class names).
+ * here would use the wrong media queries (and reach them, as they share the class names). That is
+ * its content's blocks and the blocks in its `data` (a Slot in the symbol renders those).
  */
 function styled_elsewhere(found: BuilderBlock[], sizes: Sizes): Set<BuilderBlock> | null {
 	let out: Set<BuilderBlock> | null = null;
 	for (let i = 0; i < found.length; i++) {
 		const component = found[i].component;
 		if (component?.name !== 'Symbol') continue;
-		const content = (component.options?.symbol as { content?: BuilderContent } | undefined)?.content;
-		const blocks = content?.data?.blocks;
-		if (!blocks || sizes_for(content.meta?.breakpoints ?? {}) === sizes) continue; // (as Plan's)
+		const symbol = component.options?.symbol as { content?: BuilderContent } | undefined;
+		const content = symbol?.content;
+		if (!content || sizes_for(content.meta?.breakpoints ?? {}) === sizes) continue; // (as Plan's)
 		const flags = { personalization: false, ab: false, symbols: false };
-		for (const block of find_blocks_guarded(blocks, new Set(), flags)) (out ??= new Set()).add(block);
+		for (const block of find_blocks_guarded([symbol as BuilderBlock], new Set(), flags)) (out ??= new Set()).add(block);
 	}
 	return out;
 }

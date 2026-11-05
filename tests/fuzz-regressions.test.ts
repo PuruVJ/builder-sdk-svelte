@@ -119,6 +119,30 @@ const CASES: Array<[string, Spec]> = [
 		}
 	],
 	[
+		"a symbol's slot blocks are styled with the symbol's breakpoints",
+		{
+			content: {
+				data: {
+					blocks: [
+						{
+							'@type': E,
+							component: {
+								name: 'Symbol',
+								options: {
+									symbol: {
+										content: { data: { blocks: [{ '@type': E, component: { name: 'Slot', options: { name: 'slotA' } } }] } },
+										data: { slotA: [{ '@type': E, id: 'builder-291a-47', responsiveStyles: { xsmall: { color: 'red' } } }] }
+									}
+								}
+							}
+						}
+					]
+				},
+				meta: { breakpoints: { xsmall: 400 } }
+			}
+		}
+	],
+	[
 		'a personalization container without an id hides its variants by "undefined-N"',
 		{ content: { data: { blocks: [{ '@type': E, component: { name: 'PersonalizationContainer', options: { variants: [{}] } } }] } }, props: { canTrack: true } }
 	],

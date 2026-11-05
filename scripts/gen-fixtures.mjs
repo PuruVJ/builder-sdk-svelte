@@ -376,7 +376,21 @@ feat('fuzz-symbol-breakpoints', [
 		id: id(),
 		component: {
 			name: 'Symbol',
-			options: { symbol: { content: { id: 'sym-bp', data: { blocks: [text('in symbol', { responsiveStyles: { medium: { color: 'green' }, small: { color: 'pink' } } })] } } } }
+			options: {
+				symbol: {
+					content: {
+						id: 'sym-bp',
+						data: {
+							blocks: [
+								text('in symbol', { responsiveStyles: { medium: { color: 'green' }, small: { color: 'pink' } } }),
+								{ '@type': E, id: id(), component: { name: 'Slot', options: { name: 'slotA' } } }
+							]
+						}
+					},
+					// (a Slot in the symbol renders these, in the symbol's <Content>)
+					data: { slotA: [text('in slot', { responsiveStyles: { small: { color: 'navy' } } })] }
+				}
+			}
 		}
 	}
 ], { content: { meta: { breakpoints: { small: 500, medium: 900 } } } });
