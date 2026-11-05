@@ -292,6 +292,16 @@ describe('subscribe_to_editor (official subscribeToEditor)', () => {
 		expect(ours_cb.mock.calls).toEqual(official_cb.mock.calls);
 	});
 
+	it('other editor messages reach no-ops (only content updates are forwarded, as the official)', () => {
+		const cb = vi.fn();
+		const stop = ours.subscribe_to_editor({ model: 'page', apiKey: 'k', callback: cb });
+		send({ type: 'builder.configureSdk', data: { breakpoints: {} } });
+		send({ type: 'builder.triggerAnimation', data: { elementId: 'x' } });
+		send({ type: 'builder.resetState', data: { model: 'page', state: { a: 1 } } });
+		stop();
+		expect(cb).not.toHaveBeenCalled();
+	});
+
 	it('trusted hosts apply', () => {
 		const cb = vi.fn();
 		const stop = ours.subscribe_to_editor({ model: 'page', apiKey: 'k', callback: cb, trustedHosts: ['cms.me'] });
