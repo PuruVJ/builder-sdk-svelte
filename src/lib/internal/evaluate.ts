@@ -30,10 +30,37 @@ export function parse_code(code: string, is_expression: boolean): string {
 	return use_return ? `return (${code});` : code;
 }
 
+/**
+ * official `getSimpleExpressionGetPath`: `state.x.y` (an optional `return `, an optional `;`) and
+ * rollup's `var _virtual_index = state.x.y; return _virtual_index` are READ with `get`, never run —
+ * a null on the path gives null (no throw, no "Failed code evaluation" log).
+ */
+const STATE_GETTER_RE = /^(return )?(\s*)?state(?<getPath>(\.\w+)+)(\s*);?$/;
+const VIRTUAL_INDEX_RE = /(\s)*var(\s)+_virtual_index(\s)*=(\s)*state(?<getPath>(\.\w+)+)(\s*);?(\s)*return(\s)*_virtual_index(\s)*/;
+
+function simple_getter(code: string): Compiled | null {
+	const trimmed = code.trim();
+	const path = (STATE_GETTER_RE.exec(trimmed) ?? VIRTUAL_INDEX_RE.exec(trimmed))?.groups?.getPath?.slice(1);
+	if (!path) return null;
+	const keys = path.split('.');
+	// (official `get`: a null / undefined link stops the walk and is the result; undefined at the end)
+	return (state) => {
+		let res = state as Record<string, unknown> | null | undefined;
+		for (const key of keys) res = res !== null && res !== undefined ? (res[key] as Record<string, unknown>) : res;
+		return res === state ? undefined : res;
+	};
+}
+
 export function compile_code(code: string, is_expression = true): Compiled | null {
 	const key = (is_expression ? 'e' : 's') + code;
 	let fn = cache.get(key);
 	if (fn !== undefined) return fn;
+	fn = simple_getter(code);
+	if (fn) {
+		if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!);
+		cache.set(key, fn);
+		return fn;
+	}
 	try {
 		fn = new Function('state', 'Builder', 'builder', 'context', 'event', parse_code(code, is_expression)) as Compiled;
 	} catch (e) {

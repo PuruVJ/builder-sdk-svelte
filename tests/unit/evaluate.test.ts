@@ -236,24 +236,44 @@ describe('the official simple-getter path (`state.a.b`)', () => {
 		expect(official).toBeUndefined();
 	});
 
-	// BUG: the official evaluate reads `state.x.y` (optionally `return `-prefixed, optionally ending in
-	// `;`, and rollup's `var _virtual_index=state.x.y;return _virtual_index`) with `get`, not by running
-	// code. evaluate.ts has no such path, so: (1) `state.x;` is a statement and yields undefined; (2) a
-	// missing link logs `Failed code evaluation` where the official is silent (log noise on every SSR of
-	// such a binding); (3) a null link gives undefined where the official gives null.
-	it.fails('`state.a;` (trailing semicolon) yields the value', () => {
+	// Regression: the official evaluate reads `state.x.y` (optionally `return `-prefixed, optionally
+	// ending in `;`, and rollup's `var _virtual_index=state.x.y;return _virtual_index`) with `get`, not by
+	// running code. evaluate.ts had no such path, so: (1) `state.x;` was a statement and yielded
+	// undefined; (2) a missing link logged `Failed code evaluation` where the official is silent (log
+	// noise on every SSR of such a binding); (3) a null link gave undefined where the official gives null.
+	it('`state.a;` (trailing semicolon) yields the value', () => {
 		const { ours, official } = both('state.a;');
 		expect(official).toBe(1);
 		expect(ours).toBe(1);
 	});
 
-	it.fails('`state.missing.x` and its rollup form log nothing', () => {
+	it('`state.missing.x` and its rollup form log nothing', () => {
 		both('var _virtual_index=state.missing.x;return _virtual_index');
 		both('state.missing.x');
 		expect(errors).not.toHaveBeenCalled();
 	});
 
-	it.fails('`state.n.x` with `n` null gives null', () => {
+	it('seeded sweep of getter-shaped code over nasty state (values and silence)', () => {
+		let seed = 99;
+		const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+		const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
+		const keys = ['a', 'n', 'u', 's', 'list', '0', 'length', 'obj', 'deep', 'y', 'constructor', 'missing', '_x9'];
+		for (let i = 0; i < 400; i++) {
+			const path = Array.from({ length: 1 + Math.floor(rand() * 4) }, () => pick(keys)).join('.');
+			const code = pick(['', 'return ', ' return ', '  ']) + 'state.' + path + pick(['', ';', ' ;', '  ']);
+			const rollup = `var _virtual_index = state.${path}; return _virtual_index`;
+			for (const c of [code, rollup])
+				for (const local of [false, true]) {
+					errors.mockClear();
+					const { ours, official } = both(c, { local });
+					expect(ours, c).toEqual(official);
+				}
+		}
+		const bad = ['state.a.b()', 'state["a"]', 'state.a + 1', 'state.a?.b', 'state.', 'state..a', 'returnstate.a', 'state.a.b; state.c'];
+		for (const c of bad) expect(both(c).ours, c).toEqual(both(c).official);
+	});
+
+	it('`state.n.x` with `n` null gives null', () => {
 		const { ours, official } = both('state.n.x');
 		expect(official).toBeNull();
 		expect(ours).toBeNull();
