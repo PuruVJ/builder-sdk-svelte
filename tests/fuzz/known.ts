@@ -44,7 +44,27 @@ export function neutralize(spec: Spec): Spec {
 
 type Rule = { why: string; test: (spec: Spec, failure: Failure, json: string) => boolean };
 
-const RULES: Rule[] = [];
+const CLASS_ID_RE = /\.(builder-[a-z0-9-]+?)(?=[\s{:.>,]|-breakpoints)/g;
+
+const RULES: Rule[] = [
+	{
+		// During SSR with tracking allowed, every A/B variation renders (hidden) next to the default,
+		// each from its own plan and sheet. A variation block that never renders (a Text's children, a
+		// hidden parent's) keeps its rules in its variation's sheet, and they reach a rendered block of
+		// another variation that shares its id. Variations do share ids (they are edited copies), but
+		// a shared id whose styles differ on a block that never renders is a corner of a corner; the
+		// official SDK emits every rendered variation block's styles globally during SSR anyway.
+		why: 'duplicate block id across A/B variations, on a block that never renders (README: Known differences)',
+		test: (spec, failure) => {
+			if (failure.kind !== 'css-extra' || !spec.content.variations) return false;
+			const in_default = JSON.stringify(spec.content.data ?? {});
+			const in_variations = JSON.stringify(spec.content.variations);
+			return [...failure.detail.matchAll(CLASS_ID_RE)].every(
+				(m) => in_default.includes(`"${m[1]}"`) && in_variations.includes(`"${m[1]}"`)
+			);
+		}
+	}
+];
 
 /** Why this failure is a known official divergence, or null when it is ours to fix. */
 export function known_official(spec: Spec, failure: Failure): string | null {

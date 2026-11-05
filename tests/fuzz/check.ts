@@ -61,7 +61,8 @@ function render(sdk: 'official' | 'ours', spec: Spec): string {
 		customComponents: comps[sdk],
 		canTrack: false,
 		data: spec.data ? JSON.parse(JSON.stringify(spec.data)) : undefined,
-		locale: spec.locale
+		locale: spec.locale,
+		...(spec.props ? JSON.parse(JSON.stringify(spec.props)) : {})
 	}).body;
 }
 

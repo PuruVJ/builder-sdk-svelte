@@ -18,6 +18,8 @@ export interface Spec {
 	content: Obj;
 	data?: Obj;
 	locale?: string;
+	/** Other JSON render props (wrappers, nonce, context, canTrack, model): over the test defaults. */
+	props?: Obj;
 }
 
 /** Names the bench's components_for registers as stand-ins (any name not built in becomes one). */
@@ -457,5 +459,27 @@ export function generate(seed: number): Spec {
 		if (r.chance(0.05)) spec.data.blocks = blocks(0, 3);
 	}
 	if (r.chance(0.3)) spec.locale = r.pick(['en-US', 'fr-FR', 'de-DE']);
+	if (r.chance(0.25)) {
+		const props: Obj = {};
+		if (r.chance(0.3)) props.contentWrapper = r.pick(['div', 'main', 'section']);
+		if (r.chance(0.3)) props.contentWrapperProps = { 'data-wrap': weird(), class: 'cw' };
+		if (r.chance(0.3)) props.blocksWrapper = r.pick(['div', 'section', 'ul']);
+		if (r.chance(0.3)) props.blocksWrapperProps = { 'data-bw': '1', role: 'list' };
+		if (r.chance(0.3)) props.nonce = r.pick(['abc', '"q"']);
+		if (r.chance(0.3)) props.context = { symbolId: 'ctx-sym', who: weird() };
+		if (r.chance(0.3)) props.model = r.pick(['page', 'symbol', '']);
+		if (r.chance(0.3)) props.canTrack = r.chance(0.5);
+		spec.props = props;
+	}
+	// A/B test variations (rendered during SSR when tracking is allowed)
+	if (r.chance(0.1) && content.id) {
+		const variations: Obj = {};
+		for (let i = r.int(3); i >= 0; i--) {
+			const vid = (content.id as string) + '-v' + i;
+			variations[vid] = { id: vid, testRatio: r.pick([0.5, 0.25, 0]), name: 'v' + i, data: { blocks: blocks(0, 3), ...(r.chance(0.3) ? { state: { title: 'variant' } } : {}) } };
+		}
+		content.variations = variations;
+		if (r.chance(0.7)) spec.props = { ...(spec.props ?? {}), canTrack: true };
+	}
 	return spec;
 }

@@ -203,7 +203,18 @@ byte** against the live path on every fixture.
 
 Known differences: the root no longer carries the official `style="display:undefined;"` quirk, and
 the official SDK's per-`<Content>` default CSS and variant scripts are only emitted where the content
-needs them.
+needs them. Also (found by the fuzz test, `tests/fuzz.test.ts`, which renders thousands of random
+pages through both SDKs):
+
+- `Builder:RawText` is registered as a built-in. The official Svelte SDK ships the block but does not
+  register it, so there it renders as an unknown component.
+- Whitespace-only text between blocks is not byte-identical. It only shows where the browser repairs
+  invalid HTML, such as a block with a link inside another linked block: the parser re-opens the outer
+  link around each text node, so the repaired trees differ. The markup as written is the same.
+- During SSR of an A/B test, a block of one variation that never renders (a child of a Text, or of a
+  hidden block) still has its rules in that variation's stylesheet. If a block of another variation
+  shares its id with different styles, those rules reach it. Within one content (and its inline
+  symbols) duplicate ids are handled.
 
 ### Editor and preview
 
