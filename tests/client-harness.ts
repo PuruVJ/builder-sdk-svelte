@@ -46,6 +46,14 @@ export async function serve(base: number, sdks: Sdk[] = ALL): Promise<Servers> {
 	const live = sdks.filter(built);
 	const procs: ChildProcess[] = [];
 	const port = (sdk: Sdk) => base + ALL.indexOf(sdk);
+	// (a server left over from an aborted run would answer instead of the fresh build)
+	for (const sdk of live) {
+		const taken = await fetch(`http://localhost:${port(sdk)}/`).then(
+			() => true,
+			() => false
+		);
+		if (taken) throw new Error(`port ${port(sdk)} is already in use (a server left from an earlier run?)`);
+	}
 	for (const sdk of live) {
 		procs.push(
 			spawn(process.execPath, [path.join(ROOT, `e2e/app/build-${sdk}`)], {
@@ -227,9 +235,10 @@ export async function until<T>(fn: () => Promise<T> | T, timeout = 10_000, what 
 export type Message = { type: string; data?: any };
 
 /**
- * The page inside an editor-shaped parent frame. The parent is served (routed) at `parent_origin`
- * — the frame's own origin by default, i.e. a trusted `localhost` editor; `http://127.0.0.1:<port>`
- * makes an untrusted one (both are loopback, so Chrome lets it frame localhost).
+ * The page inside an editor-shaped parent frame. The parent is a blank page the app serves
+ * (e2e/app/src/routes/client-editor-shell) at `parent_origin` — the frame's own origin by default,
+ * i.e. a trusted `localhost` editor; `http://127.0.0.1:<port>` makes an untrusted one (both
+ * loopback, so Chrome's local-network checks let it frame localhost).
  * Every message the page posts to its parent is recorded in `messages()`.
  */
 export async function in_editor(
@@ -239,9 +248,7 @@ export async function in_editor(
 	{ parent_origin, wait = true, context_options }: { parent_origin?: string; wait?: boolean; context_options?: Parameters<Browser['newContext']>[0] } = {}
 ) {
 	const { context, page, problems } = await fresh(servers, context_options);
-	const editor = `${parent_origin ?? servers.origin(sdk)}/__editor`;
-	await page.route(editor, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><body style="margin:0"></body>' }));
-	await page.goto(editor);
+	await page.goto(`${parent_origin ?? servers.origin(sdk)}/client-editor-shell`);
 	const ready = page.evaluate(() => {
 		(window as any).__messages = [];
 		addEventListener('message', (e) => (window as any).__messages.push(e.data));
@@ -255,7 +262,13 @@ export async function in_editor(
 		frame.style.cssText = 'width:1200px;height:900px;border:0';
 		document.body.append(frame);
 	}, src);
-	if (wait) await ready;
+	if (wait) {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		await Promise.race([
+			ready,
+			new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`no builder.sdkInfo from ${src}`)), 15_000)))
+		]).finally(() => clearTimeout(timer));
+	}
 	const path_only = route.split('?')[0];
 	const frame = await until(() => page.frames().find((f) => f !== page.mainFrame() && new URL(f.url()).pathname === path_only), 10_000, 'the frame');
 	await frame.waitForLoadState('load');
