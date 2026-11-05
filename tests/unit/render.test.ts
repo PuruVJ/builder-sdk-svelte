@@ -231,10 +231,10 @@ describe('component_props', () => {
 		}
 	});
 
-	// BUG: official getBlockComponentOptions spreads a Text block's component.options AGAIN after
+	// Regression: official getBlockComponentOptions spreads a Text block's component.options AGAIN after
 	// block.options (evaluateTextComponentTextOption returns `{...component.options, text}`), so for a
-	// Text block with a string text, component.options win over block.options. Ours lets block.options win.
-	it.fails('a Text block: component.options win over block.options, as in the official SDK', () => {
+	// Text block with a string text, component.options win over block.options. Ours let block.options win.
+	it('a Text block: component.options win over block.options, as in the official SDK', () => {
 		const b: BuilderBlock = { '@type': EL, id: 'builder-ord', component: { name: 'Text', options: { text: 'c', k: 'component' } }, options: { k: 'block' } };
 		const { ctx, scope } = setup([b]);
 		const { attributes: _a, ...ours } = component_props(ctx.plan.compile(b), scope);

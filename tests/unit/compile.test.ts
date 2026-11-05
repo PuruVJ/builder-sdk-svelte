@@ -477,9 +477,9 @@ describe('block_css', () => {
 		expect(p.compile({ ...b, hide: true }).css).toBe('');
 	});
 
-	// BUG: a hover animation without `easing`: the official camelToKebabCase(undefined) gives '',
-	// ours kebab(String(undefined)) gives 'undefined' -> `transition: all 1s undefined;`.
-	it.fails('a hover animation without easing matches the official text', () => {
+	// Regression: a hover animation without `easing`: the official camelToKebabCase(undefined) gives '',
+	// ours gave kebab(String(undefined)) = 'undefined' -> `transition: all 1s undefined;`.
+	it('a hover animation without easing matches the official text', () => {
 		const b: BuilderBlock = { id: 'builder-ne', animations: [{ trigger: 'hover', duration: 1 }] };
 		expect(block_css(b, plan())).toBe(expected_css(b, undefined));
 	});

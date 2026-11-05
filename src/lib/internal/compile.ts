@@ -429,7 +429,13 @@ function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean, t
 	const name = block.component?.name;
 	const comp = name ? lookup(plan.registry, name, plan.model) : null;
 
-	const options: Record<string, unknown> = block.options ? { ...resolved, ...block.options } : (resolved ?? NO_OPTIONS);
+	// (official getBlockComponentOptions: a Text block with a string text spreads its component
+	// options again, last — they win over block.options)
+	const options: Record<string, unknown> = block.options
+		? name === 'Text' && typeof resolved?.text === 'string' && resolved.text !== ''
+			? { ...resolved, ...block.options, ...resolved }
+			: { ...resolved, ...block.options }
+		: (resolved ?? NO_OPTIONS);
 
 	let text_tpl: Compiled['text_tpl'] = null;
 	if (name === 'Text' && typeof resolved?.text === 'string' && resolved.text.includes('{{')) {
@@ -537,7 +543,7 @@ export function block_css(block: BuilderBlock, plan: Plan): string {
 	if (hover_anim) {
 		hover = css_class(`${class_name}:hover`, {
 			...(hover_anim.steps?.[1]?.styles || {}),
-			transition: `all ${hover_anim.duration}s ${kebab(String(hover_anim.easing))}`,
+			transition: `all ${hover_anim.duration}s ${hover_anim.easing ? kebab(String(hover_anim.easing)) : ''}`, // (official camelToKebabCase: '' when none)
 			transitionDelay: hover_anim.delay ? `${hover_anim.delay}s` : '0s'
 		});
 	}
