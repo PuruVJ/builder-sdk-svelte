@@ -52,7 +52,9 @@ function test_fields(item: BuilderContent, group: string) {
 
 /** official `handleABTestingSync` / `handleABTesting` (browser: the cookie decides, else a draw). */
 export function handle_ab_testing(item: BuilderContent | null | undefined, can_track: boolean): BuilderContent | null | undefined {
-	if (!can_track || !item || !has_variations(item)) return item;
+	if (!can_track) return item;
+	if (!item) return undefined;
+	if (!has_variations(item)) return item;
 	let group = get_cookie(test_key(item.id!), true);
 	if (!group) {
 		group = random_variation_id(item.id!, item.variations!);

@@ -6,7 +6,7 @@
  */
 import type { BuilderContent } from './official/types/builder-content.js';
 import type { GetContentOptions } from './official/functions/get-content/types.js';
-import { fetch_entries, fetch_one_entry, builder_search_params, type GetContentOptions as FetchOptions } from './internal/fetch.js';
+import { fetch_entries, fetch_one_entry, builder_search_params, process_results, type GetContentOptions as FetchOptions } from './internal/fetch.js';
 import { is_browser, is_editing, is_previewing } from './internal/env.js';
 import {
 	create_register_component_message,
@@ -61,9 +61,9 @@ export async function fetchEntries(options: GetContentOptions): Promise<BuilderC
 export async function fetchOneEntry(options: GetContentOptions): Promise<BuilderContent | null> {
 	return fetch_one_entry(options as FetchOptions) as Promise<never>;
 }
-/** official `_processContentResult` (the server leg: results as-is; A/B assignment is browser-side). */
-export async function _processContentResult(_options: GetContentOptions, content: { results: BuilderContent[] }) {
-	return content.results;
+/** official `_processContentResult`: the results, A/B variations applied in the browser. */
+export async function _processContentResult(options: GetContentOptions, content: { results: BuilderContent[] }) {
+	return (content.results = process_results(options, content.results));
 }
 
 /** official `fetchBuilderProps`: the props `<Content>` needs for a url (or path + search params). */

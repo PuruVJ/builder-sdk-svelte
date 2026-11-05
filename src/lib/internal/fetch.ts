@@ -3,8 +3,10 @@
  * (functions/get-content), minus the SDK-wide globals.
  */
 import type { BuilderContent } from '../types.js';
+import { handle_ab_testing } from './ab-tests.js';
 import { is_browser } from './env.js';
 import { sdk_headers } from './track.js';
+import { set_can_track } from './user-attributes.js';
 
 export interface GetContentOptions {
 	model: string;
@@ -34,7 +36,8 @@ const is_positive = (n: unknown) => typeof n === 'number' && !isNaN(n) && n >= 0
 function flatten(obj: Record<string, unknown>, path: string | null = null, out: Record<string, unknown> = {}) {
 	for (const key of Object.keys(obj)) {
 		const value = obj[key];
-		const p = path ? path + '.' + key : key;
+		// (official `[path, key].filter(Boolean).join('.')`: an empty key adds no segment)
+		const p = path ? (key ? path + '.' + key : path) : key;
 		if (typeof value === 'object' && value !== null && !(Array.isArray(value) && value.length === 0))
 			flatten(value as Record<string, unknown>, p, out);
 		else out[p] = value;
@@ -162,7 +165,24 @@ export async function fetch_entries(options: GetContentOptions): Promise<Builder
 		console.error('[Builder.io]: Error fetching data. ', { url, content, options });
 		throw content;
 	}
-	return content.results!;
+	return process_results(options, content.results!);
+}
+
+/**
+ * official `_processContentResult`: in the browser (tracking allowed) each entry comes back with its
+ * A/B variation applied (the cookie's, else a draw stored in it), as a client-side fetch expects.
+ */
+export function process_results(options: { canTrack?: boolean | null }, results: BuilderContent[]): BuilderContent[] {
+	// (official `getDefaultCanTrack`: the user-attributes service follows it)
+	const can_track = options.canTrack ?? true;
+	set_can_track(can_track);
+	if (!can_track || !is_browser()) return results;
+	try {
+		return results.map((item) => handle_ab_testing(item, true) as BuilderContent);
+	} catch (e) {
+		console.error('[Builder.io]: Could not process A/B tests. ', e);
+		return results;
+	}
 }
 
 export async function fetch_one_entry(options: GetContentOptions): Promise<BuilderContent | null> {
