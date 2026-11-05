@@ -12,7 +12,7 @@ export function script_calls(js: string): unknown[][] {
 
 /** A plain id / locale / content: the official bytes apply as they are. */
 export const is_plain = (...parts: unknown[]) =>
-	parts.every((p) => p === undefined || !/["\\  ]|<\/script|<!--/i.test(typeof p === 'string' ? p : JSON.stringify(p)));
+	parts.every((p) => p === undefined || !/["\\\u2028\u2029]|<\/script|<!--/i.test(typeof p === 'string' ? p : JSON.stringify(p)));
 
 const S = 'script';
 /** No `</script` or `<!--` that would end or confuse the tag. */
