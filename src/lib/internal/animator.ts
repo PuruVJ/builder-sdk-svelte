@@ -63,7 +63,7 @@ export function trigger_animation(a: Animation): void {
 		el.style.transitionDelay = '0';
 		assign(el.style, a.steps[0].styles);
 		setTimeout(() => {
-			el.style.transition = `all ${a.duration}s ${kebab(a.easing)}`;
+			el.style.transition = `all ${a.duration}s ${kebab(a.easing || '')}`;
 			if (a.delay) el.style.transitionDelay = a.delay + 's';
 			assign(el.style, a.steps[1].styles);
 			setTimeout(() => {
@@ -111,7 +111,7 @@ function bind_scroll_in_view(a: Animation): void {
 		const on_scroll = throttle(on_scroll_now, 200);
 		assign(el.style, a.steps[0].styles);
 		setTimeout(() => {
-			el.style.transition = `all ${a.duration}s ${kebab(a.easing)}`;
+			el.style.transition = `all ${a.duration}s ${kebab(a.easing || '')}`;
 			if (a.delay) el.style.transitionDelay = a.delay + 's';
 		});
 		document.addEventListener('scroll', on_scroll, { capture: true, passive: true });
