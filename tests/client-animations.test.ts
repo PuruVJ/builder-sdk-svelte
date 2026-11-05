@@ -87,6 +87,35 @@ describe.skipIf(!pair_built)('animations behave the same in the browser', () => 
 		return steps;
 	});
 
+	// official bug: a scrollInView animation that has run removes its document `scroll` listener
+	// without the `capture` flag it was added with, so the listener stays for the page's life. Ours
+	// removes it (the repeating one keeps its own, by design).
+	differential(
+		get,
+		'scrollInView: a non-repeating animation drops its scroll listener once it has run',
+		async (sdk) => {
+			const { context, page, problems } = await open_page(servers, sdk, '/client-animations', { context_options: { viewport: { width: 1000, height: 700 } } });
+			const scroll_listeners = async () => {
+				const cdp = await context.newCDPSession(page);
+				const { result } = await cdp.send('Runtime.evaluate', { expression: 'document' });
+				const { listeners } = await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId! });
+				await cdp.detach();
+				return listeners.filter((l) => l.type === 'scroll').length;
+			};
+			const before = await scroll_listeners();
+			expect(before).toBe(2); // the two scrollInView blocks
+			await page.evaluate(() => document.querySelector('[builder-id="builder-scroll"]')!.scrollIntoView({ block: 'center' }));
+			await settled(page, 'scroll', 1);
+			const after = await scroll_listeners();
+			if (sdk === 'official') expect(after).toBe(2); // (the bug, recorded)
+			else expect(after).toBe(1);
+			expect(problems.errors).toEqual([]);
+			await context.close();
+			return { before, after };
+		},
+		{ official_known: 'a scrollInView animation never removes its scroll listener (removed without `capture`)' }
+	);
+
 	differential(get, 'hover: the :hover step applies while hovered, and goes', async (sdk) => {
 		const { context, page, problems } = await open_page(servers, sdk, '/client-animations');
 		const steps: unknown[] = [await look(page, 'hover')];
