@@ -146,7 +146,7 @@
 
 	/** official `emitStateUpdate`: the editor's state panel follows root state (editing only). */
 	let last_state: string | undefined;
-	function emit_state() {
+	function emit_state(always = false) {
 		if (!is_editing()) return;
 		let json: string;
 		try {
@@ -154,8 +154,9 @@
 		} catch {
 			return; // (a cycle or a BigInt in state: nothing the editor could read)
 		}
-		// Unchanged since the last report: say nothing (no echo loop with the editor's own resetState).
-		if (json === last_state) return;
+		// Unchanged since the last report: say nothing (no echo loop with the editor's own resetState) —
+		// unless the editor asked (it has just started listening, and has nothing yet).
+		if (json === last_state && !always) return;
 		last_state = json;
 		window.dispatchEvent(new CustomEvent('builder:component:stateChange', { detail: { state: JSON.parse(json), ref: { name: model } } }));
 	}
@@ -232,10 +233,12 @@
 					apiKey: apiKey as string
 				});
 				bridge.post_component_infos(ctx.registry.by_name.values(), model);
-				window.addEventListener('builder:component:stateChangeListenerActivated', emit_state);
+				// (official: the editor's state panel asks, every content answers with its state)
+				const on_listener_activated = () => emit_state(true);
+				window.addEventListener('builder:component:stateChangeListenerActivated', on_listener_activated);
 				stop_listening = () => {
 					window.removeEventListener('message', on_message);
-					window.removeEventListener('builder:component:stateChangeListenerActivated', emit_state);
+					window.removeEventListener('builder:component:stateChangeListenerActivated', on_listener_activated);
 				};
 			});
 		}
