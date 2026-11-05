@@ -6,6 +6,8 @@
 		"build:official": "BUILDER_SDK=official vite build",
 		"build:ours": "BUILDER_SDK=ours vite build",
 		"build:latest": "BUILDER_SDK=latest vite build",
+		"build:ours:async": "BUILDER_SDK=ours SVELTE_ASYNC=1 vite build",
+		"build:official:async": "BUILDER_SDK=official SVELTE_ASYNC=1 vite build",
 		"serve": "vite preview"
 	},
 	"dependencies": {

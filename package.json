@@ -52,7 +52,7 @@
 		"e2e:ours:async": "cd e2e/suite && SERVER_NAME=sveltekit BUILDER_SDK=ours SVELTE_ASYNC=1 TEST_TYPE=e2e playwright test",
 		"e2e:official:async": "cd e2e/suite && SERVER_NAME=sveltekit BUILDER_SDK=official SVELTE_ASYNC=1 TEST_TYPE=e2e playwright test",
 		"test:editor-fuzz": "vitest run tests/editor-fuzz.test.ts",
-		"test:async-ssr": "vite build --config bench/vite.ssr.async.config.ts && vitest run tests/async-ssr.test.ts"
+		"test:async-ssr": "pnpm bench:build && vite build --config bench/vite.ssr.async.config.ts && vitest run tests/async-ssr.test.ts"
 	},
 	"peerDependencies": {
 		"svelte": "^5.30.0"
