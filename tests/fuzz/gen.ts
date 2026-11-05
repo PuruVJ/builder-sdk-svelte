@@ -20,6 +20,8 @@ export interface Spec {
 	locale?: string;
 	/** Other JSON render props (wrappers, nonce, context, canTrack, model): over the test defaults. */
 	props?: Obj;
+	/** Render with the test LinkStub as `linkComponent` (only lists handed it use it, as official). */
+	link?: boolean;
 }
 
 /** Names the bench's components_for registers as stand-ins (any name not built in becomes one). */
@@ -478,6 +480,7 @@ export function generate(seed: number): Spec {
 		if (r.chance(0.3)) props.canTrack = r.chance(0.5);
 		spec.props = props;
 	}
+	if (r.chance(0.25)) spec.link = true;
 	// A/B test variations (rendered during SSR when tracking is allowed)
 	if (r.chance(0.1) && content.id) {
 		const variations: Obj = {};

@@ -300,7 +300,7 @@
 		)}
 	{/if}
 	{@html styles_html}
-	<Blocks blocks={ctx.content?.data?.blocks} />
+	<Blocks blocks={ctx.content?.data?.blocks} linkComponent={ctx.link_component} />
 {/snippet}
 {#snippet nothing()}{/snippet}
 {#snippet wrapped()}

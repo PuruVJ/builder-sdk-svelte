@@ -6,7 +6,7 @@
 import { normalize } from '../normalize.js';
 import type { Json, Spec } from './gen.js';
 // @ts-ignore built by `pnpm bench:build`
-import { components_for, render_content, set_plain } from '../../bench/dist/entry.js';
+import { components_for, official_test_components, render_content, set_plain } from '../../bench/dist/entry.js';
 
 const ELEMENT = '@builder.io/sdk:Element';
 const BUILDER_ID_RE = /builder-id="([^"]+)"/g;
@@ -62,6 +62,7 @@ function render(sdk: 'official' | 'ours', spec: Spec): string {
 		canTrack: false,
 		data: spec.data ? JSON.parse(JSON.stringify(spec.data)) : undefined,
 		locale: spec.locale,
+		...(spec.link ? { linkComponent: official_test_components.LinkStub } : {}),
 		...(spec.props ? JSON.parse(JSON.stringify(spec.props)) : {})
 	}).body;
 }

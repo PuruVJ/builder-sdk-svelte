@@ -47,7 +47,11 @@
 		const base = scope_of_store(context) ?? inherited?.();
 		if (!base) return undefined;
 		const want_registry = registeredComponents ? registry_for(registeredComponents) : base.ctx.registry;
-		const want_link = linkComponent ?? base.ctx.link_component;
+		// The link component is the one handed to THIS list, never inherited (official Blocks reads only
+		// its prop): <Content> and the built-ins that forward it (Columns, Tabs, Accordion, Symbol) hand
+		// it on; a custom component's list, Slot's and PersonalizationContainer's do not, so their link
+		// blocks are plain <a> elements, as with the official SDK.
+		const want_link = linkComponent;
 		if (want_registry === base.ctx.registry && want_link === base.ctx.link_component) return base;
 		// Inherit the context through the prototype (its live `root` getter stays live); a different
 		// registry compiles into its own plan (a block's compiled record depends on the registry).

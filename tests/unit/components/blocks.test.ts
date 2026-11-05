@@ -2,7 +2,7 @@
 // BlocksWrapperProps, an explicit context store, registeredComponents, linkComponent, children —
 // rendered by a custom component (bench/stubs/unit/Probe*.svelte) through each SDK's own <Blocks>.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { blocks_html, check, comp, each_case, lines, official_html, page, setup, teardown, text, type CompSpec } from './harness.js';
+import { blocks_html, check, comp, each_case, lines, page, setup, teardown, text, type CompSpec } from './harness.js';
 import { normalize } from '../../normalize.js';
 import StubOurs from '../../../bench/stubs/StubOurs.svelte';
 
@@ -82,22 +82,29 @@ describe('<Blocks> props', () => {
 		expect(list).toContain('data-l="1"');
 	});
 
-	// Known difference, kept: a <Blocks> that is not handed a `linkComponent` renders links through
-	// the content's linkComponent here. The official <Blocks> takes it from its prop only, so a list
-	// that does not forward it (a custom component's, Slot's, PersonalizationContainer's — while
-	// Columns, Tabs and Accordion do forward it) falls back to a plain <a>.
-	it('known difference: a list not handed the linkComponent still renders links through it', () => {
+	// As the official SDK: a <Blocks> uses the link component handed to IT, never the content's.
+	// <Content> and the built-ins that forward it (Columns, Tabs, Accordion) hand it on; a list that
+	// does not (a custom component's, Slot's, PersonalizationContainer's) renders link blocks as a
+	// plain <a>. (Blocks.svelte `resolve`.)
+	it('a list not handed the linkComponent renders plain links, as the official SDK', () => {
 		const lists = {
 			'a custom component': probe({}),
 			Slot: page([comp('slot', 'Slot', { name: 'area' })], { state: { area: [text('lk', 'x', { href: '/l' })] } }),
 			PersonalizationContainer: page([comp('pc', 'PersonalizationContainer', {}, { children: [text('lk', 'x', { href: '/l' })] })])
 		};
 		for (const [label, content] of Object.entries(lists)) {
-			const c = check({ content, customComponents: PROBE, link: true }, { official: false });
-			expect(lines(c.ours, /<a .*href=/).every((l) => l.includes('data-link-component')), label).toBe(true);
-			const official = normalize(official_html({ content, customComponents: PROBE, link: true }));
-			expect(lines(official, /<a .*href=/).some((l) => !l.includes('data-link-component')), label).toBe(true);
+			// same tree, css and props as the official SDK (and live)
+			const c = check({ content, customComponents: PROBE, link: true });
+			const links = lines(c.ours, /<a .*href=/);
+			expect(links.length, label).toBeGreaterThan(0);
+			expect(links.some((l) => l.includes('data-link-component')), label).toBe(false);
 		}
+	});
+
+	it('the built-ins that forward it (Columns) render links through the linkComponent, as the official SDK', () => {
+		const content = page([comp('cols', 'Columns', { columns: [{ blocks: [text('lk', 'x', { href: '/l' })] }] })]);
+		const c = check({ content, customComponents: PROBE, link: true });
+		expect(lines(c.ours, /<a .*href=/).every((l) => l.includes('data-link-component'))).toBe(true);
 	});
 
 	it('ours: registeredComponents as an array (official takes only the by-name object)', () => {
