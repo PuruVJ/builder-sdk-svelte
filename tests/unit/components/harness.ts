@@ -108,7 +108,15 @@ export interface Props {
 	[k: string]: unknown;
 }
 
-const clone = <T>(v: T): T => (v === undefined || v === null ? v : JSON.parse(JSON.stringify(v)));
+/** A fresh copy of the content for each render (an SDK may write to it); functions (a component
+ *  handed through an option) are kept as they are. */
+function clone<T>(v: T): T {
+	if (Array.isArray(v)) return v.map(clone) as T;
+	if (!v || typeof v !== 'object') return v;
+	const out: Record<string, unknown> = {};
+	for (const k in v) if ((v as Record<string, unknown>)[k] !== undefined) out[k] = clone((v as Record<string, unknown>)[k]);
+	return out as T;
+}
 
 /** The props one SDK renders: defaults (model page, an api key, no tracking), the content cloned. */
 export function props_for(sdk: Sdk, p: Props): Record<string, unknown> {
