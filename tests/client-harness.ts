@@ -176,6 +176,8 @@ export async function offline(
 				body: answer.json !== undefined ? JSON.stringify(answer.json) : (answer.body ?? '')
 			});
 		}
+		// (the content API: no entries — a symbol without inline content finds nothing)
+		if (/\/api\/v\d\/content\//.test(req.url)) return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"results":[]}' });
 		if (/\/api\//.test(req.url)) return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{}' });
 		return route.fulfill({ status: 200, headers: cors, contentType: 'image/png', body: PIXEL });
 	});
