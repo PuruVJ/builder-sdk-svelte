@@ -349,6 +349,20 @@ write('feat-fuzz-data-blocks.json', { content: { id: 'content-data-blocks', data
 		dup('builder-dup-c', {
 			component: { name: 'Symbol', options: { symbol: { content: { id: 'sym-dup', data: { blocks: [dup('builder-x', { hide: true, children: [dup('builder-dup-c', { responsiveStyles: { large: { margin: '1px' } } })] })] } } } } }
 		}),
+		// (the same, in a symbol whose options hold a localized value: its content renders as a copy)
+		dup('builder-dup-d', {
+			component: {
+				name: 'Symbol',
+				options: {
+					symbol: {
+						content: {
+							id: 'sym-dup-loc',
+							data: { blocks: [dup('builder-y', { component: { name: 'Text', options: { text: loc('<p>a</p>', '<p>b</p>') } }, children: [dup('builder-dup-d', { component: { options: { title: loc('t', 'u') } }, responsiveStyles: { large: { margin: '2px' } } })] })] }
+						}
+					}
+				}
+			}
+		}),
 		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } }),
 		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } })
 	]);

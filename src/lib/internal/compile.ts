@@ -18,7 +18,7 @@ import type { BuilderBlock, BuilderContent, RegisteredComponent } from '../types
 import { max_width_query, sizes_for, type Sizes } from './breakpoints.js';
 import { css_class, kebab, style_attr } from './css.js';
 import { compile_code } from './evaluate.js';
-import { mark_option_owners, original_block, resolve_localized } from './localized.js';
+import { mark_option_owners, original_block, resolve_localized, source_block } from './localized.js';
 import { parse_path } from './paths.js';
 import { lookup, type Registry } from './registry.js';
 
@@ -178,7 +178,7 @@ export class Plan {
 			const c = compile_block(block, this, !(any_localized && localized.has(block)), block.tagName);
 			this.compiled.set(block, c);
 			if (c.id !== undefined) ids.push(c.id);
-			if (!c.bindings && c.css && !NO_SHEET.has(block) && !elsewhere?.has(block)) {
+			if (!c.bindings && c.css && !(any_no_sheet && NO_SHEET.has(source_block(block))) && !elsewhere?.has(block)) {
 				sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
 				c.in_sheet = true;
 				// The repeated block renders `c.repeat.block` per item: same styles, already in.
@@ -207,7 +207,10 @@ export class Plan {
 		sheet = '';
 		for (const c of blocks) {
 			if (clashes.has(c.id)) {
-				NO_SHEET.add(c.src); // (also out of a nested content's sheet: an inline symbol's own plan)
+				// (also out of a nested content's sheet: an inline symbol's own plan, which may render a
+				// localized copy of the block)
+				NO_SHEET.add(source_block(c.src));
+				any_no_sheet = true;
 				if (!c.in_sheet) continue;
 				c.in_sheet = false;
 				if (c.repeat) this.repeat_in_sheet.delete(c.repeat.block);
@@ -225,6 +228,7 @@ export class Plan {
 
 /** Blocks whose id clashes with another block's (Plan.unsheet): never in any plan's sheet. */
 const NO_SHEET = new WeakSet<BuilderBlock>();
+let any_no_sheet = false;
 /**
  * The blocks of inline symbols whose breakpoints differ from this content's. A symbol's blocks
  * render in the symbol's own <Content>, styled by ITS sheet with ITS breakpoints: rules for them

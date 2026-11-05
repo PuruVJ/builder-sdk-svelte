@@ -38,10 +38,17 @@ export function resolve_localized(
 const resolved_blocks = new Map<string, WeakMap<object, unknown>>();
 /** A resolved copy → its block, when the copy renders as the block does. */
 const renders_as = new WeakMap<object, object>();
+/** Every resolved copy → its block. */
+const copied_from = new WeakMap<object, object>();
 
 /** The block a resolved nested-block copy renders exactly as, or undefined. */
 export function original_block<T extends object>(copy: T): T | undefined {
 	return renders_as.get(copy) as T | undefined;
+}
+
+/** The block a resolved nested-block copy was made from (itself when it is not a copy). */
+export function source_block<T extends object>(block: T): T {
+	return (copied_from.get(block) as T | undefined) ?? block;
 }
 
 function walk(value: unknown, locale: string): unknown {
@@ -56,7 +63,10 @@ function walk(value: unknown, locale: string): unknown {
 		if (out === undefined) {
 			out = walk_entries(obj, locale);
 			blocks.set(obj, out);
-			if (out !== obj && same_render(obj, out as Record<string, unknown>)) renders_as.set(out as object, obj);
+			if (out !== obj) {
+				copied_from.set(out as object, obj);
+				if (same_render(obj, out as Record<string, unknown>)) renders_as.set(out as object, obj);
+			}
 		}
 		return out;
 	}
