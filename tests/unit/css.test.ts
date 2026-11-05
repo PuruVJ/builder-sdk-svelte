@@ -187,21 +187,20 @@ describe('css_class vs official createCssClass', () => {
 		document.body.innerHTML = '';
 	});
 
-	// BUG (minor): css_class and style_attr dash keys with `kebab`, which (like the svelte stringifyStyles)
-	// lowercases only A-Z. The official createCssClass / getStyle use camelToKebabCase, which lowercases
-	// the whole key, so a key with a non-ASCII uppercase letter (a custom property `--colorÉ`, case
-	// sensitive in CSS) is written differently.
-	it.fails('a key with a non-ASCII uppercase letter, as the official', () => {
+	// Regression: css_class and style_attr dashed keys with `kebab`, which (like the svelte
+	// stringifyStyles) lowercases only A-Z. The official createCssClass / getStyle use camelToKebabCase,
+	// which lowercases the whole key (a custom property `--colorÉ` is case sensitive in CSS).
+	it('a key with a non-ASCII uppercase letter, as the official', () => {
 		const styles = { '--brandÉclat': 'red', colorΣ: 'blue' };
 		expect(css_class('b', styles)).toBe(official('b', styles));
 		expect(style_attr(styles)).toBe(convertStyleMapToCSSArray(styles as Partial<CSSStyleDeclaration>).join(' '));
 	});
 
-	// BUG: css_class makes the class name and every value safe, but not the media query. The media query
-	// is `@media (max-width: ${breakpoint}px)` with the breakpoint taken from content.meta.breakpoints
+	// Regression: css_class made the class name and every value safe, but not the media query: it is
+	// `@media (max-width: ${breakpoint}px)` with the breakpoint taken from content.meta.breakpoints
 	// unchecked (breakpoints.ts copies it as is), so a string breakpoint such as
-	// `</style><script>…</script>` ends the block style tag and injects markup.
-	it.fails('a media query that would close the style tag is written safe', () => {
+	// `</style><script>…</script>` ended the block style tag and injected markup.
+	it('a media query that would close the style tag is written safe', () => {
 		const out = css_class('b', { color: 'red' }, '@media (max-width: </style><script>alert(1)</script>px)');
 		expect(out).not.toMatch(/<\/style/i);
 	});

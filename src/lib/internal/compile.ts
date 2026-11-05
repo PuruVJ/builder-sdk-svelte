@@ -16,7 +16,7 @@
  */
 import type { BuilderBlock, BuilderContent, RegisteredComponent } from '../types.js';
 import { max_width_query, sizes_for, type Sizes } from './breakpoints.js';
-import { css_class, kebab, style_attr } from './css.js';
+import { camel_to_kebab, css_class, style_attr } from './css.js';
 import { compile_code } from './evaluate.js';
 import { mark_option_owners, original_block, resolve_localized, source_block } from './localized.js';
 import { parse_path } from './paths.js';
@@ -544,7 +544,7 @@ export function block_css(block: BuilderBlock, plan: Plan): string {
 	if (hover_anim) {
 		hover = css_class(`${class_name}:hover`, {
 			...(hover_anim.steps?.[1]?.styles || {}),
-			transition: `all ${hover_anim.duration}s ${hover_anim.easing ? kebab(String(hover_anim.easing)) : ''}`, // (official camelToKebabCase: '' when none)
+			transition: `all ${hover_anim.duration}s ${hover_anim.easing ? camel_to_kebab(String(hover_anim.easing)) : ''}`, // (official camelToKebabCase: '' when none)
 			transitionDelay: hover_anim.delay ? `${hover_anim.delay}s` : '0s'
 		});
 	}

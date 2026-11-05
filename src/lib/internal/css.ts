@@ -16,6 +16,19 @@ export function kebab(key: string): string {
 	return out;
 }
 
+const CSS_NAME_CACHE = new Map<string, string>();
+
+/** Official `camelToKebabCase`: {@link kebab}, then the WHOLE key lowercased (a non-ASCII capital
+ *  too). What style keys and easings go through; `stringify_styles` keeps the svelte helper's rule. */
+export function camel_to_kebab(key: string): string {
+	let out = CSS_NAME_CACHE.get(key);
+	if (out === undefined) {
+		out = kebab(key).toLowerCase();
+		CSS_NAME_CACHE.set(key, out);
+	}
+	return out;
+}
+
 /** `{ a: '1', b: 2 }` → `a: 1;` declarations joined by `sep` — only string values, as the official
  *  `convertStyleMapToCSSArray(...).join(sep)`. One string built in place (no array, no join). */
 function style_decls(style: Record<string, unknown> | undefined, sep: string, in_tag: boolean): string {
@@ -26,8 +39,8 @@ function style_decls(style: Record<string, unknown> | undefined, sep: string, in
 		if (typeof value !== 'string') continue;
 		if (out !== '') out += sep;
 		// (a VALUE is checked, a flat string from the content: no scan of the built text)
-		if (in_tag && value.includes('</')) out += kebab(key) + ': ' + css_safe(value) + ';';
-		else out += kebab(key) + ': ' + value + ';';
+		if (in_tag && value.includes('</')) out += camel_to_kebab(key) + ': ' + css_safe(value) + ';';
+		else out += camel_to_kebab(key) + ': ' + value + ';';
 	}
 	return out;
 }
@@ -41,7 +54,8 @@ export function style_attr(style: Record<string, unknown> | undefined): string {
 export function css_class(class_name: string, styles: Record<string, unknown>, media_query?: string): string {
 	const name = class_name.includes('</') ? css_safe(class_name) : class_name;
 	const css = '.' + name + ' {\n    ' + style_decls(styles, '\n', true) + '\n  }';
-	return media_query ? media_query + ' {\n      ' + css + '\n    }' : css;
+	// (the media query carries the content's breakpoints: made safe too)
+	return media_query ? css_safe(media_query) + ' {\n      ' + css + '\n    }' : css;
 }
 
 const CLOSE_STYLE_RE = new RegExp('</(' + 'style)', 'gi');
