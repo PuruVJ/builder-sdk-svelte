@@ -26,3 +26,4 @@ fixtures/probe/
 bench/prof/
 .check-bundle/
 .check-types/
+coverage/
