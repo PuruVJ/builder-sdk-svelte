@@ -6,10 +6,7 @@ import { content_url, fetch_entries, fetch_one_entry } from '../../src/lib/inter
 import { generateContentUrl } from '../../node_modules/@builder.io/sdk-svelte/src/functions/get-content/generate-content-url';
 import { fetchEntries, fetchOneEntry } from '../../node_modules/@builder.io/sdk-svelte/src/functions/get-content/index';
 
-const set_url = (path: string) => window.history.replaceState({}, '', path);
-const clear_cookies = () => {
-	for (const c of document.cookie.split('; ')) if (c) document.cookie = c.split('=')[0] + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-};
+import { clear_cookies, set_url } from './_dom.js';
 
 beforeEach(() => {
 	set_url('/');
@@ -94,5 +91,22 @@ describe('fetched content in the browser: A/B assignment (official _processConte
 		const ours = await fetch_entries({ apiKey: 'k', model: 'page', canTrack: false, fetch: fake() as never });
 		expect(ours).toEqual(content().results);
 		expect(ours).toEqual(await fetchEntries({ apiKey: 'k', model: 'page', canTrack: false, fetch: fake() } as never));
+	});
+
+	it('an entry whose variations throw: logged, the results as they came (official: caught too)', async () => {
+		const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const bad = {
+			id: 'c',
+			variations: {
+				get v1(): never {
+					throw new Error('bad');
+				}
+			}
+		};
+		const f = vi.fn(async () => ({ json: async () => ({ results: [bad] }) }) as unknown as Response);
+		const out = await fetch_entries({ apiKey: 'k', model: 'page', fetch: f as never });
+		expect(out[0]).toBe(bad);
+		expect(err).toHaveBeenCalledWith('[Builder.io]: Could not process A/B tests. ', expect.any(Error));
+		expect(await fetchEntries({ apiKey: 'k', model: 'page', fetch: f } as never)).toEqual([bad]);
 	});
 });
