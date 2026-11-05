@@ -327,4 +327,14 @@ feat('fuzz-data-merge', [text('{{state.title}} / {{state.fromJs}}')], {
 	props: { data: { title: 'from data', blocks: [text('data blocks never render')], cssCode: '.from-data { color: blue; }' } }
 });
 write('feat-fuzz-data-blocks.json', { content: { id: 'content-data-blocks', data: { state: { a: 1 } } }, data: { blocks: [text('from the data prop')] } });
+// A component whose options hold blocks receives them with their localized values resolved (the
+// official walk resolves the whole options tree in place, nested blocks included).
+{
+	const nested_loc = [
+		{ '@type': E, id: id(), component: { name: 'Gen - Card', options: { items: [{ '@type': E, id: id(), component: { name: 'Text', options: { text: loc('<p>Hi</p>', '<p>Salut</p>') } }, children: [text('kid', { component: { name: 'Text', options: { text: loc('<p>kid</p>', '<p>enfant</p>') } } })] }] } } },
+		{ '@type': E, id: id(), component: { name: 'Columns', options: { columns: [{ blocks: [{ '@type': E, id: id(), component: { name: 'Text', options: { text: loc('<p>col</p>', '<p>colonne</p>') } }, responsiveStyles: { large: { color: 'red' } } }] }] } } },
+		{ '@type': E, id: id(), component: { name: 'Gen - Card', options: { title: loc({ inner: loc('a', 'b') }, { inner: loc('c', 'd') }) } } }
+	];
+	feat('fuzz-nested-localized', nested_loc, { props: { locale: 'fr-FR' }, content: {} });
+}
 console.log('feature fixtures written');

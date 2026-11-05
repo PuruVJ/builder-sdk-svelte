@@ -18,7 +18,7 @@ import type { BuilderBlock, BuilderContent, RegisteredComponent } from '../types
 import { max_width_query, sizes_for, type Sizes } from './breakpoints.js';
 import { css_class, kebab, style_attr } from './css.js';
 import { compile_code } from './evaluate.js';
-import { resolve_localized } from './localized.js';
+import { mark_option_owners, original_block, resolve_localized } from './localized.js';
 import { parse_path } from './paths.js';
 import { lookup, type Registry } from './registry.js';
 
@@ -134,7 +134,9 @@ export class Plan {
 	compile(block: BuilderBlock): Compiled {
 		let c = this.compiled.get(block);
 		if (!c) {
-			c = compile_block(block, this, false, block.tagName);
+			// a nested block's resolved copy (localized.ts) renders as the block itself
+			const original = original_block(block);
+			c = original ? this.compile(original) : compile_block(block, this, false, block.tagName);
 			this.compiled.set(block, c);
 		}
 		return c;
@@ -162,6 +164,7 @@ export class Plan {
 		const localized = new Set<BuilderBlock>();
 		const found = find_blocks(blocks, localized, this.flags, MAX_VISITS) ?? find_blocks_guarded(blocks, localized, this.flags);
 		const any_localized = localized.size > 0; // most content has none: no lookup per block
+		if (any_localized) mark_option_owners(blocks, localized, MAX_VISITS);
 		let sheet = '';
 		for (let i = 0; i < found.length; i++) {
 			const block = found[i];
