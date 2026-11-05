@@ -1,6 +1,5 @@
 <script lang="ts">
 	/** A symbol: a nested content (official blocks/symbol) — rendered by our own <Content>. */
-	import { untrack } from 'svelte';
 	import { get, type Writable } from 'svelte/store';
 	import { reconcile } from '../internal/live.js';
 	import { scope_of_store } from '../internal/scope.js';
@@ -8,6 +7,7 @@
 	import { all_attrs } from './helpers.js';
 	import { fetch_one_entry } from '../internal/fetch.js';
 	import Content from '../components/Content.svelte';
+	import Run from '../components/Run.svelte';
 
 	type SymbolInfo = {
 		model?: string;
@@ -71,12 +71,9 @@
 			.catch((err) => console.error('[Builder.io]: Could not fetch symbol content: ', err));
 	}
 	// The official SDK also fires this fetch during SSR and throws the result away; only the browser
-	// does. Then again whenever the symbol's entry changes (the editor pointing it at another symbol).
-	$effect(() => {
-		symbol?.entry;
-		symbol?.model;
-		untrack(set_content);
-	});
+	// does — after mount, and again whenever the symbol's entry changes (the editor pointing it at
+	// another symbol): see the keyed <Run> below.
+	const fetch_key = $derived(`${symbol?.model}\u0000${symbol?.entry}`);
 
 	// <Content> reads its props once: a symbol remounts it when what it renders changes — compared by
 	// value (a bound or edited symbol hands over a new but often equal object), never on every render.
@@ -118,3 +115,4 @@
 	/>
 	{/key}
 </div>
+{#key fetch_key}<Run run={set_content} />{/key}
