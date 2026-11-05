@@ -9,11 +9,11 @@
  * component asked for is built on demand, once per scope.
  */
 import { writable, type Writable } from 'svelte/store';
-import type { BuilderContent, RegisteredComponents } from '../types.js';
+import type { BuilderContent, RegisteredComponent } from '../types.js';
 import type { Plan } from './compile.js';
 import { flatten_state, type EvalScope, type Globals } from './evaluate.js';
 import type { Registry } from './registry.js';
-import { serialize_including_functions } from './editor.js';
+import { NOT_IN_EDITOR, serialize_including_functions } from './editor.js';
 
 export const SCOPE_BRAND = Symbol.for('puruvj.builder.scope');
 
@@ -113,7 +113,7 @@ export class Scope implements EvalScope {
 		// Editor-only data the official SDK serialises for every <Content>: built only if read.
 		Object.defineProperty(value, 'componentInfos', {
 			enumerable: true,
-			get: () => component_infos(ctx.registry.as_object(ctx.model))
+			get: () => component_infos(ctx.registry.by_name.values())
 		});
 		// The public contract is a Svelte store (custom components read `$builderContext`): it re-emits
 		// when the content or root state changes, and costs nothing until something subscribes.
@@ -127,11 +127,14 @@ export class Scope implements EvalScope {
 	}
 }
 
-function component_infos(components: RegisteredComponents): Record<string, unknown> {
+/** official Content `componentInfos`: every registered component (any model), serialized —
+ *  minus ours-only entries the official list does not have (RawText). */
+function component_infos(components: Iterable<RegisteredComponent>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
-	for (const name in components) {
-		const { component: _c, ...info } = components[name];
-		out[name] = serialize_including_functions(info);
+	for (const entry of components) {
+		if ((entry as { [NOT_IN_EDITOR]?: boolean })[NOT_IN_EDITOR]) continue;
+		const { component: _c, ...info } = entry;
+		out[entry.name] = serialize_including_functions(info);
 	}
 	return out;
 }

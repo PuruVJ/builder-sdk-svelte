@@ -1,5 +1,9 @@
 // internal/scope.ts: state layering, writes to root, repeat items, the builderContext store.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// (the official block list pulls in its evaluator: the browser runtime stands in for the placeholder)
+vi.mock('placeholder-runtime', async () => ({
+	evaluator: (await import('../../node_modules/@builder.io/sdk-svelte/src/functions/evaluate/browser-runtime/browser')).runInBrowser
+}));
 import { get, readable, writable } from 'svelte/store';
 import { create_content, type ContentInput } from '../../src/lib/internal/content.js';
 import { SCOPE_BRAND, Scope, scope_of_store } from '../../src/lib/internal/scope.js';
@@ -192,7 +196,9 @@ describe('Scope.store', () => {
 		expect(ctx.listeners.size).toBe(0);
 	});
 
-	it('componentInfos: serialized, component stripped, filtered by model', () => {
+	// Regression: componentInfos was filtered by model; the official Content lists every registered
+	// component (defaults + custom, any model), serialized.
+	it('componentInfos: serialized, component stripped, every model (official Content)', () => {
 		const custom: RegisteredComponent[] = [
 			{ name: 'Mine', component: () => 1, inputs: [{ name: 'x', onChange: (o: unknown) => o }] },
 			{ name: 'OtherModel', component: () => 1, models: ['section'] }
@@ -206,11 +212,37 @@ describe('Scope.store', () => {
 		const input = (infos.Mine.inputs as Array<Record<string, unknown>>)[0];
 		expect(typeof input.onChange).toBe('string');
 		expect(input.onChange).toBe('return ((o) => o).apply(this, arguments)');
-		expect(infos.OtherModel).toBeUndefined();
+		expect(infos.OtherModel).toEqual({ name: 'OtherModel', models: ['section'] });
 		expect(infos.Text).toBeDefined();
+		// ours-only built-ins are not in the official list
+		expect(infos['Builder:RawText']).toBeUndefined();
+		expect(Object.keys(infos).slice(-2)).toEqual(['Mine', 'OtherModel']);
 		// built on each read (a getter), never shared with the registry
 		expect(value.componentInfos).not.toBe(infos);
 		expect(value.componentInfos).toEqual(infos);
+	});
+});
+
+describe('componentInfos vs the official Content', () => {
+	it('the same infos, in the same order, as the official default list + custom components', async () => {
+		const { getDefaultRegisteredComponents } = await import('../../node_modules/@builder.io/sdk-svelte/src/constants/builder-registered-components');
+		const { serializeIncludingFunctions } = await import('../../node_modules/@builder.io/sdk-svelte/src/functions/register-component');
+		const custom: RegisteredComponent[] = [
+			{ name: 'Mine', component: () => 1, inputs: [{ name: 'x', onChange: (o: unknown) => o }] },
+			{ name: 'Text', component: () => 2, inputs: [] },
+			{ name: 'Sec', component: () => 1, models: ['section'] }
+		];
+		// official components/content/content.svelte `componentInfos`
+		const official = [...getDefaultRegisteredComponents(), ...custom].reduce(
+			(acc: Record<string, unknown>, { component: _, ...info }: any) => ({ ...acc, [info.name]: serializeIncludingFunctions(info) }),
+			{}
+		);
+		const { scope } = setup({ customComponents: custom });
+		const ours = (get(scope.store()) as Record<string, unknown>).componentInfos as Record<string, unknown>;
+		expect(Object.keys(ours)).toEqual(Object.keys(official));
+		// (serialized functions: the same source, indented differently by the two TS transforms)
+		const squash = (v: unknown) => JSON.parse(JSON.stringify(v, (_k, x) => (typeof x === 'string' ? x.replace(/\s+/g, ' ') : x)));
+		expect(squash(ours)).toEqual(squash(official));
 	});
 });
 
