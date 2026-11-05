@@ -40,9 +40,16 @@ const resolved_blocks = new Map<string, WeakMap<object, unknown>>();
 const renders_as = new WeakMap<object, object>();
 /** Every resolved copy → its block. */
 const copied_from = new WeakMap<object, object>();
+/** Every resolved copy → the locale it was resolved for. */
+const copy_locale = new WeakMap<object, string>();
 
-/** The block a resolved nested-block copy renders exactly as, or undefined. */
-export function original_block<T extends object>(copy: T): T | undefined {
+/**
+ * The block a resolved nested-block copy renders exactly as, or undefined. With `locale`: only when
+ * the copy was resolved for that locale — a copy handed to a nested content (a symbol's, which has
+ * no locale of its own) is already resolved for its parent's, and renders as itself.
+ */
+export function original_block<T extends object>(copy: T, locale?: string): T | undefined {
+	if (locale !== undefined && copy_locale.get(copy) !== locale) return undefined;
 	return renders_as.get(copy) as T | undefined;
 }
 
@@ -65,6 +72,7 @@ function walk(value: unknown, locale: string): unknown {
 			blocks.set(obj, out);
 			if (out !== obj) {
 				copied_from.set(out as object, obj);
+				copy_locale.set(out as object, locale);
 				if (same_render(obj, out as Record<string, unknown>)) renders_as.set(out as object, obj);
 			}
 		}

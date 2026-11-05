@@ -135,8 +135,9 @@ export class Plan {
 	compile(block: BuilderBlock): Compiled {
 		let c = this.compiled.get(block);
 		if (!c) {
-			// a nested block's resolved copy (localized.ts) renders as the block itself
-			const original = original_block(block);
+			// a nested block's resolved copy (localized.ts) renders as the block itself — when it was
+			// resolved for this plan's locale (a symbol's blocks come resolved for the parent's)
+			const original = original_block(block, this.locale ?? 'Default');
 			c = original ? this.compile(original) : compile_block(block, this, false, block.tagName);
 			this.compiled.set(block, c);
 		}
