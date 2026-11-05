@@ -7,6 +7,7 @@
  */
 import type { BuilderBlock } from '../types.js';
 import { is_browser, is_editing } from '../internal/env.js';
+import { script_safe } from '../internal/tags.js';
 import { filterWithCustomTargeting } from '../internal/vendor/personalization-fns.js';
 
 export const DEFAULT_INDEX = 'default';
@@ -23,8 +24,10 @@ export function scripts_for(variants: Variant[], block_id: string, locale: strin
 	const key = block_id + '\0' + (locale ?? '') + '\0' + String(raw_id);
 	let s = by_key.get(key);
 	if (!s) {
-		const json = JSON.stringify(variants);
-		const tail = `, "${block_id}", false${locale ? `, "${locale}"` : ''})`;
+		// (made safe for the script tag: variants hold content — a Custom Code block's `</script>`
+		// would end the tag; ids JSON-quoted, the official `"${id}"` for a plain id. tags.ts)
+		const json = script_safe(JSON.stringify(variants));
+		const tail = script_safe(`, ${JSON.stringify(String(block_id))}, false${locale ? `, ${JSON.stringify(String(locale))}` : ''})`);
 		let hide = '';
 		for (let i = 0; i < variants.length; i++) hide += `div[data-variant-id="${raw_id}-${i}"] { display: none !important; } `;
 		s = {

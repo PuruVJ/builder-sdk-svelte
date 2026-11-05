@@ -116,10 +116,10 @@ describe('variants_style', () => {
 		expect(parsed(variants_style('b', '', css))).toHaveLength(1);
 	});
 
-	// BUG: the block id goes into the unquoted `data-id` attribute as is. A block id from content such as
-	// `x></style><img src=x onerror=alert(1)><style` ends the tag and injects markup (the CSS is made safe,
-	// the id is not). The official SDK has the same hole (InlinedStyles writes the id unquoted too).
-	it.fails('a block id cannot end the tag', () => {
+	// Regression (official bug, not copied): the block id went into the unquoted `data-id` attribute as
+	// is: an id from content such as `x></style><img …><style` ended the tag and injected markup.
+	// A character that would end the attribute is dropped; a plain id is written as the official.
+	it('a block id cannot end the tag', () => {
 		const html = variants_style('x></style><img id=pwn src=x><style', '', '');
 		expect(parsed(html).map((e) => e.tag)).toEqual(['STYLE']);
 	});

@@ -19,6 +19,7 @@ import {
 } from '../../node_modules/@builder.io/sdk-svelte/src/components/content-variants/helpers';
 import { getInitPersonalizationVariantsFnsScriptString } from '../../node_modules/@builder.io/sdk-svelte/src/blocks/personalization-container/helpers';
 import { handleABTestingSync } from '../../node_modules/@builder.io/sdk-svelte/src/helpers/ab-tests';
+import { breaks_tag, is_plain, script_calls } from './_script-args.js';
 
 // (the official cookie helpers warn when there is no document)
 beforeEach(() => void vi.spyOn(console, 'warn').mockImplementation(() => {}));
@@ -73,9 +74,30 @@ describe('inline scripts (byte for byte)', () => {
 	for (const [i, variants] of variant_sets.entries())
 		for (const id of ['c', '', 'id"with"quotes', 'ü'])
 			it(`update scripts #${i} "${id}"`, () => {
-				expect(update_cookie_and_styles_script(variants, id)).toBe(getUpdateCookieAndStylesScript(variants, id));
-				expect(update_variant_visibility_script(id, 'c')).toBe(getUpdateVariantVisibilityScript({ variationId: id, contentId: 'c' }));
+				const a = update_cookie_and_styles_script(variants, id);
+				const b = update_variant_visibility_script(id, 'c');
+				if (is_plain(variants, id)) {
+					expect(a).toBe(getUpdateCookieAndStylesScript(variants, id));
+					expect(b).toBe(getUpdateVariantVisibilityScript({ variationId: id, contentId: 'c' }));
+				}
+				// (a quote in an id breaks the official script; ours JSON-quotes it: the same call it means)
+				expect(script_calls(a)).toEqual([['builderIoAbTest', id, JSON.parse(JSON.stringify(variants)), false, false]]);
+				expect(script_calls(b)).toEqual([['builderIoRenderContent', id, 'c', false]]);
 			});
+	it('ids that would end the script tag are written safe (official bug, not copied)', () => {
+		const S = 'script';
+		const id = `x</${S}><img src=x onerror=alert(1)><!--`;
+		const a = update_cookie_and_styles_script([{ id, testRatio: 1 }], id);
+		const b = update_variant_visibility_script(id, id);
+		expect(breaks_tag(a) || breaks_tag(b)).toBe(false);
+		expect(script_calls(a)).toEqual([['builderIoAbTest', id, [{ id, testRatio: 1 }], false, false]]);
+		expect(script_calls(b)).toEqual([['builderIoRenderContent', id, id, false]]);
+		expect(breaks_tag(getUpdateCookieAndStylesScript([{ id }], id))).toBe(true);
+	});
+	it('the variants style cannot be ended by a variation id', () => {
+		const out = style_tag('builderio-variants', '', `.variant-x</style><b>pwn</b> { display: none; } `);
+		expect(out.match(/<\/style/gi)).toHaveLength(1);
+	});
 	// official components/inlined-script.svelte and inlined-styles.svelte
 	const official_script = (id: string, nonce: string, body: string) => `<script  data-id=${id}  nonce=${nonce || ''}>${body}</script>`;
 	const official_style = (id: string, nonce: string, body: string) => `<style  data-id=${id}  nonce=${nonce}  >${body}</style>`;

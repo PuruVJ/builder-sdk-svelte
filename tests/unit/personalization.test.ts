@@ -29,6 +29,19 @@ import {
 	getPersonalizationScript,
 	getUpdateVisibilityStylesScript
 } from '../../node_modules/@builder.io/sdk-svelte/src/blocks/personalization-container/helpers';
+import { breaks_tag, is_plain, script_calls } from './_script-args.js';
+
+/**
+ * Ours vs the official script text: byte for byte for plain ids / content; otherwise (a quote in an
+ * id, a `</script` in a variant's content) ours is the same calls with the arguments the official
+ * means, and cannot end its tag (tags.ts `script_safe`; the official text breaks there).
+ */
+function same_script(ours: string, official: string, variants: unknown, id: string, locale: string | undefined) {
+	if (is_plain(variants, id, locale)) return expect(ours).toBe(official);
+	expect(breaks_tag(ours)).toBe(false);
+	const name = official.slice('window.'.length, official.indexOf('('));
+	expect(script_calls(ours)).toEqual([[name, JSON.parse(JSON.stringify(variants)), id, false, ...(locale ? [locale] : [])]]);
+}
 
 function mulberry32(seed: number) {
 	return () => {
@@ -71,8 +84,8 @@ describe('scripts_for vs official script builders', () => {
 	it('identical strings', () => {
 		for (const [variants, id, locale, raw] of CASES) {
 			const s = scripts_for(variants, id, locale, raw);
-			expect(s.personalization).toBe(getPersonalizationScript(variants as any, id, locale));
-			expect(s.visibility).toBe(getUpdateVisibilityStylesScript(variants as any, id, locale));
+			same_script(s.personalization, getPersonalizationScript(variants as any, id, locale), variants, id, locale);
+			same_script(s.visibility, getUpdateVisibilityStylesScript(variants as any, id, locale), variants, id, locale);
 			expect(s.hide_styles).toBe(official_hide(variants, raw));
 		}
 	});
@@ -123,10 +136,24 @@ describe('scripts_for vs official script builders', () => {
 			const locale = locales[Math.floor(rand() * locales.length)];
 			const raw = rand() < 0.2 ? undefined : id;
 			const s = scripts_for(variants, id, locale, raw);
-			expect(s.personalization).toBe(getPersonalizationScript(variants as any, id, locale));
-			expect(s.visibility).toBe(getUpdateVisibilityStylesScript(variants as any, id, locale));
+			same_script(s.personalization, getPersonalizationScript(variants as any, id, locale), variants, id, locale);
+			same_script(s.visibility, getUpdateVisibilityStylesScript(variants as any, id, locale), variants, id, locale);
 			expect(s.hide_styles).toBe(official_hide(variants, raw));
 		}
+	});
+
+	// Regression (official bug, not copied): a variant's content holding `</script>` (a Custom Code
+	// block with a script) ended the inline script early; the rest of the JSON showed as page text.
+	it('content that would end the script tag is written safe, the same JSON', () => {
+		const S = 'script';
+		const code = `<${S}>console.log(1)</${S}><!-- c --><b>x</b>`;
+		const variants: Variant[] = [{ blocks: [{ '@type': '@builder.io/sdk:Element', id: 'cc', component: { name: 'Custom Code', options: { code } } }] }];
+		const s = scripts_for(variants, 'builder-p', 'en', 'builder-p');
+		for (const js of [s.personalization, s.visibility]) {
+			expect(breaks_tag(js)).toBe(false);
+			expect((script_calls(js)[0][1] as any)[0].blocks[0].component.options.code).toBe(code);
+		}
+		expect(breaks_tag(getPersonalizationScript(variants as any, 'builder-p', 'en'))).toBe(true);
 	});
 });
 
