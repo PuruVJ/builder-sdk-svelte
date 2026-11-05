@@ -22,7 +22,7 @@ export function process(c: Compiled, scope: Scope): Compiled {
 		const value = b.fn ? run(b.fn, scope, b.code) : undefined;
 		block = set_cow(block, b.path, value, copied);
 	}
-	return scope.ctx.plan.compile_fresh(block);
+	return scope.ctx.plan.compile_fresh(block, c.src.tagName);
 }
 
 /** A Text block's `{{expr}}` template, evaluated (official `evaluateTextComponentTextOption`). */

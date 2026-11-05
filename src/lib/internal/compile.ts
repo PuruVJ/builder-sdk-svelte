@@ -134,7 +134,7 @@ export class Plan {
 	compile(block: BuilderBlock): Compiled {
 		let c = this.compiled.get(block);
 		if (!c) {
-			c = compile_block(block, this, false);
+			c = compile_block(block, this, false, block.tagName);
 			this.compiled.set(block, c);
 		}
 		return c;
@@ -166,7 +166,7 @@ export class Plan {
 		for (let i = 0; i < found.length; i++) {
 			const block = found[i];
 			if (this.compiled.has(block)) continue; // the same object reached twice
-			const c = compile_block(block, this, !(any_localized && localized.has(block)));
+			const c = compile_block(block, this, !(any_localized && localized.has(block)), block.tagName);
 			this.compiled.set(block, c);
 			if (!c.bindings && c.css) {
 				sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
@@ -178,9 +178,10 @@ export class Plan {
 		this.sheet = sheet;
 	}
 
-	/** Compile a block without caching (a bound block's per-render copy). */
-	compile_fresh(block: BuilderBlock): Compiled {
-		return compile_block(block, this, false);
+	/** Compile a block without caching (a bound block's per-render copy). Its tag is `tag_name`: the
+	 *  official Block reads the tag from the block as written, never from a bound `tagName`. */
+	compile_fresh(block: BuilderBlock, tag_name: string | undefined): Compiled {
+		return compile_block(block, this, false, tag_name);
 	}
 }
 
@@ -340,7 +341,7 @@ function find_blocks_guarded(root: BuilderBlock[], localized: Set<BuilderBlock>,
 	return found;
 }
 
-function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): Compiled {
+function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean, tag_name: string | undefined): Compiled {
 	const raw_options = block.component?.options;
 	// A block the content walk found to own no localized value skips the walk of its options.
 	const resolved = no_localized ? raw_options : resolve_localized(raw_options, plan.locale);
@@ -404,7 +405,6 @@ function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): 
 		};
 	}
 
-	const tag_name = block.tagName;
 	const is_link = tag_name === 'a' || !!block.properties?.href || !!block.href;
 	const tag = is_link ? 'a' : tag_name || 'div';
 

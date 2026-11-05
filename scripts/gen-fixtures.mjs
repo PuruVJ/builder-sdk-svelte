@@ -312,4 +312,11 @@ feat('builtins', [
 	{ '@type': E, id: id(), component: { name: 'Embed', options: { content: '<iframe src="about:blank"></iframe>' } } },
 	{ '@type': E, id: id(), component: { name: 'Raw:Img', options: { image: 'https://cdn.builder.io/x.png' } } }
 ]);
+// ── 4. fuzz regressions (tests/fuzz.test.ts found these; minimal shapes) ─────────────────────
+// A bound `tagName` does not change the tag (the official Block reads the block's own tagName).
+feat('fuzz-bound-tag', [
+	box([text('bound span')], { bindings: { tagName: '"span"' } }),
+	box([text('bound a')], { bindings: { tagName: '"a"', 'properties.title': '"t"' } }),
+	box([text('written span')], { tagName: 'span', bindings: { tagName: '"section"' } })
+]);
 console.log('feature fixtures written');
