@@ -64,9 +64,9 @@ describe('Plan.key', () => {
 		expect(new Set(list.map((b) => p.key(list, b))).size).toBe(list.length);
 	});
 
-	// BUG: a generated `id~n` key is not recorded as used, so a block whose id IS `a~1` collides with
-	// the second `a` (a duplicate key in the keyed each of a live tree).
-	it.fails('live: an id that looks like a generated key never collides', () => {
+	// Regression: a generated `id~n` key was not recorded as used, so a block whose id IS `a~1`
+	// collided with the second `a` (a duplicate key in the keyed each of a live tree).
+	it('live: an id that looks like a generated key never collides', () => {
 		const p = plan({ live: true });
 		const list: BuilderBlock[] = [{ id: 'a' }, { id: 'a' }, { id: 'a~1' }];
 		const keys = list.map((b) => p.key(list, b));
@@ -221,8 +221,9 @@ describe('compile_block fields', () => {
 		expect(Object.keys(c.attrs)).toEqual(['href', 'title', 'class', 'data-x', 'builder-id', 'style']);
 		expect(c.attrs).toEqual({ href: '/h', title: 't', class: 'builder-o builder-block k pc', 'data-x': '1', 'builder-id': 'builder-o', style: 'color: red; margin-top: 1px;' });
 		const bare = p.compile({ '@type': EL });
-		expect(Object.keys(bare.attrs)).toEqual(['builder-id', 'style', 'class']);
-		expect(bare.attrs).toEqual({ 'builder-id': undefined, style: '', class: 'builder-block' });
+		// (the official object always starts with `href`, undefined when the block has none)
+		expect(Object.keys(bare.attrs)).toEqual(['href', 'builder-id', 'style', 'class']);
+		expect(bare.attrs).toStrictEqual({ href: undefined, 'builder-id': undefined, style: '', class: 'builder-block' });
 	});
 
 	// official getBlockProperties, minus keys whose value is undefined (no attribute either way)
@@ -256,10 +257,10 @@ describe('compile_block fields', () => {
 		}
 	});
 
-	// BUG: official getBlockProperties starts the object with `href: block.href` (even when undefined),
-	// so a `properties.href` sits FIRST among the attributes; ours puts it where `properties` has it,
-	// and the wrapper's attributes come out in another order (`<a target=… href=…>` vs `<a href=… target=…>`).
-	it.fails('attribute order with properties.href and no block.href matches the official SDK', () => {
+	// Regression: official getBlockProperties starts the object with `href: block.href` (even when
+	// undefined), so a `properties.href` sits FIRST among the attributes; ours put it where `properties`
+	// had it (`<a target=… href=…>` vs the official `<a href=… target=…>`).
+	it('attribute order with properties.href and no block.href matches the official SDK', () => {
 		const b: BuilderBlock = { '@type': EL, id: 'builder-ho', properties: { target: '_blank', href: '/x' } };
 		expect(Object.keys(defined(plan().compile(b).attrs))).toEqual(Object.keys(official_props(b)));
 	});

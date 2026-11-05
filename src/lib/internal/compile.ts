@@ -115,14 +115,15 @@ export class Plan {
 		let keys = keys_by_list.get(list);
 		if (!keys) {
 			keys = new Map();
-			const seen = new Map<string, number>();
+			// (every key given out is used: a block whose id IS `a~1` never collides with a second `a`)
+			const used = new Set<string>();
 			for (let i = 0; i < list.length; i++) {
 				const b = list[i] as BuilderBlock;
 				if (keys.has(b)) continue;
-				let key = typeof b?.id === 'string' && b.id !== '' ? b.id : '#' + i;
-				const n = seen.get(key) ?? 0;
-				seen.set(key, n + 1);
-				if (n) key += '~' + n;
+				const base = typeof b?.id === 'string' && b.id !== '' ? b.id : '#' + i;
+				let key = base;
+				for (let n = 1; used.has(key); n++) key = base + '~' + n;
+				used.add(key);
 				keys.set(b, key);
 			}
 			keys_by_list.set(list, keys);
@@ -445,8 +446,9 @@ function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean, t
 	let cls = block.id ? block.id + ' builder-block' : 'builder-block';
 	if (block.class) cls += ' ' + block.class;
 	if (block.properties?.class) cls += ' ' + block.properties.class;
-	const attrs: Record<string, unknown> = {};
-	if (block.href !== undefined) attrs.href = block.href;
+	// (official getBlockProperties: `{ href: block.href, ...block.properties, … }` — `href` comes first
+	// even when only `properties` has one; an undefined value renders nothing)
+	const attrs: Record<string, unknown> = { href: block.href };
 	if (block.properties) Object.assign(attrs, block.properties);
 	attrs['builder-id'] = block.id;
 	attrs.style = style_attr(block.style);
