@@ -24,6 +24,8 @@ const seeds = ONE !== undefined ? [Number(ONE)] : Array.from({ length: N }, (_, 
 
 const official_crashes: Array<[number, string]> = [];
 const crash_repro = new Map<string, { spec: Spec; ours: string }>();
+const shrunk_by_kind = new Map<string, number>();
+const MAX_SHRINKS_PER_KIND = 5;
 const skipped: Array<[number, string]> = [];
 
 beforeAll(() => {
@@ -86,6 +88,12 @@ describe('fuzz: both SDKs render random content the same', () => {
 				skipped.push([seed, why]);
 				return;
 			}
+			// Shrinking costs up to thousands of renders: the first few failures of a kind are shrunk,
+			// the rest only reported (rerun one with FUZZ_SEED to shrink it).
+			const shrunk = (shrunk_by_kind.get(failure.kind) ?? 0) + 1;
+			shrunk_by_kind.set(failure.kind, shrunk);
+			if (shrunk > MAX_SHRINKS_PER_KIND && ONE === undefined)
+				expect.fail(`seed ${seed}: ${failure.kind} (not shrunk: FUZZ_SEED=${seed} to shrink it)\n${failure.detail}`);
 			const min: Spec = shrink(spec, (s) => {
 				const r = check(s);
 				return same_class(failure, r.failure) && !known_official(s, r.failure!);

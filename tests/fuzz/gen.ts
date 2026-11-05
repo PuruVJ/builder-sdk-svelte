@@ -65,7 +65,7 @@ const WEIRD = [
 
 const COLORS = ['red', 'blue', 'rgba(0, 0, 0, 0.5)', '#fff', 'var(--x)', 'inherit'];
 const STYLE_KEYS = ['color', 'marginTop', 'display', 'fontSize', 'backgroundColor', 'paddingLeft', 'flexDirection', 'position', 'width', 'opacity'];
-const STYLE_VALUES = ['10px', 'flex', 'none', 'column', 'relative', '50%', 'auto', '1', '0', '', 'calc(100% - 4px)', 'url("a.png")'];
+const STYLE_VALUES = ['10px', 'flex', 'none', 'column', 'relative', '50%', 'auto', '1', '0', '', 'calc(100% - 4px)', 'url("a.png")', 'red; } .evil { color: blue', '"quoted"', '</style>'];
 const TAGS = ['div', 'div', 'div', 'a', 'span', 'img', 'input', 'svg', 'section', 'p', 'button', 'ul', 'li', 'h1', 'br', 'textarea', 'custom-el', 'Span', 'DIV', 'my-elem'];
 
 export function generate(seed: number): Spec {
@@ -359,7 +359,7 @@ export function generate(seed: number): Spec {
 		if (r.chance(0.15)) b.style = style();
 		if (r.chance(0.6)) {
 			const rs: Obj = {};
-			for (const size of ['large', 'medium', 'small', 'xsmall']) if (r.chance(size === 'large' ? 0.8 : 0.3)) rs[size] = style();
+			for (const size of ['large', 'medium', 'small', 'xsmall']) if (r.chance(size === 'large' ? 0.8 : 0.3)) rs[size] = r.chance(0.03) ? (null as unknown as Json) : style();
 			b.responsiveStyles = rs;
 		}
 		if (r.chance(0.08)) b.show = r.pick([true, false, null, 0, 1]);
@@ -380,14 +380,21 @@ export function generate(seed: number): Spec {
 					'show',
 					'hide',
 					'tagName',
-					'component.options.items.0.x'
+					'component.options.items.0.x',
+					'component.name',
+					'class',
+					'href',
+					'id',
+					'responsiveStyles.small.display'
 				]);
 				bind[path] =
 					path === 'show' || path === 'hide'
 						? code_for('bool')
 						: path.startsWith('style') || path.startsWith('responsive')
 							? code_for('style')
-							: path === 'tagName'
+							: path === 'component.name'
+								? r.pick(['"Text"', '"Fuzz Card"', '"Core:Button"', '"Nope"', 'state.missing'])
+								: path === 'tagName'
 								? r.pick(['"span"', '"a"', 'state.missing'])
 								: code_for('text');
 			}
