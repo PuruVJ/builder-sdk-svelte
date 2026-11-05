@@ -320,4 +320,11 @@ feat('fuzz-bound-tag', [
 	box([text('bound a')], { bindings: { tagName: '"a"', 'properties.title': '"t"' } }),
 	box([text('written span')], { tagName: 'span', bindings: { tagName: '"section"' } })
 ]);
+// `data` only fills in what content.data lacks (EnableEditor re-merges the content over it), and it
+// wins in root state over what jsCode wrote.
+feat('fuzz-data-merge', [text('{{state.title}} / {{state.fromJs}}')], {
+	content: { data: { jsCode: 'state.title = "js:" + state.title; state.fromJs = "js";', cssCode: '.from-content { color: red; }' } },
+	props: { data: { title: 'from data', blocks: [text('data blocks never render')], cssCode: '.from-data { color: blue; }' } }
+});
+write('feat-fuzz-data-blocks.json', { content: { id: 'content-data-blocks', data: { state: { a: 1 } } }, data: { blocks: [text('from the data prop')] } });
 console.log('feature fixtures written');
