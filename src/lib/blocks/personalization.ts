@@ -15,16 +15,18 @@ export type Variant = { blocks: BuilderBlock[]; query?: unknown; startDate?: str
 type Scripts = { personalization: string; visibility: string; hide_styles: string };
 const scripts_cache = new WeakMap<object, Map<string, Scripts>>();
 
-export function scripts_for(variants: Variant[], block_id: string, locale: string | undefined): Scripts {
+/** `block_id` is the block's id or 'none' (the scripts); the hiding rules use the id as it is, as the
+ *  official `hideVariantsStyleString` does (`undefined-0` for a block without one). */
+export function scripts_for(variants: Variant[], block_id: string, locale: string | undefined, raw_id: unknown): Scripts {
 	let by_key = scripts_cache.get(variants);
 	if (!by_key) scripts_cache.set(variants, (by_key = new Map()));
-	const key = block_id + '\0' + (locale ?? '');
+	const key = block_id + '\0' + (locale ?? '') + '\0' + String(raw_id);
 	let s = by_key.get(key);
 	if (!s) {
 		const json = JSON.stringify(variants);
 		const tail = `, "${block_id}", false${locale ? `, "${locale}"` : ''})`;
 		let hide = '';
-		for (let i = 0; i < variants.length; i++) hide += `div[data-variant-id="${block_id}-${i}"] { display: none !important; } `;
+		for (let i = 0; i < variants.length; i++) hide += `div[data-variant-id="${raw_id}-${i}"] { display: none !important; } `;
 		s = {
 			personalization: `window.builderIoPersonalization(${json}${tail}`,
 			visibility: `window.updateVisibilityStylesScript(${json}${tail}`,

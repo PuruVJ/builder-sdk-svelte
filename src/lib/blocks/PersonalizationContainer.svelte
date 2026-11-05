@@ -34,7 +34,7 @@
 	const list = $derived(variants || []);
 	const can_track = ctx?.canTrack ?? true;
 	const should_render_variants = $derived(list.length > 0 && !!can_track);
-	const scripts = $derived(should_render_variants ? scripts_for(list, id, locale) : null);
+	const scripts = $derived(should_render_variants ? scripts_for(list, id, locale, builderBlock?.id) : null);
 	const nonce = ctx?.nonce || '';
 
 	let user_attrs = $state(get_user_attributes_cookie());
