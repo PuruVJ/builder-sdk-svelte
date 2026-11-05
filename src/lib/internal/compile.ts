@@ -90,7 +90,7 @@ export class Plan {
 	readonly repeat_in_sheet = new WeakSet<BuilderBlock>();
 	sheet = '';
 	/** What the content uses that needs page-level helper scripts (found by the same one walk). */
-	readonly flags = { personalization: false, ab: false };
+	readonly flags = { personalization: false, ab: false, symbols: false };
 
 	constructor(opts: PlanOptions) {
 		this.options = opts;
@@ -171,13 +171,14 @@ export class Plan {
 		// renders. Duplicate ids are rare: they are found by a sort (no hashing per block), and only
 		// then is the sheet rebuilt without the ids whose blocks disagree on styles (see unsheet).
 		const ids: unknown[] = [];
+		const elsewhere = this.flags.symbols ? styled_elsewhere(found, this.sizes) : null;
 		for (let i = 0; i < found.length; i++) {
 			const block = found[i];
 			if (this.compiled.has(block)) continue; // the same object reached twice
 			const c = compile_block(block, this, !(any_localized && localized.has(block)), block.tagName);
 			this.compiled.set(block, c);
 			if (c.id !== undefined) ids.push(c.id);
-			if (!c.bindings && c.css && !NO_SHEET.has(block)) {
+			if (!c.bindings && c.css && !NO_SHEET.has(block) && !elsewhere?.has(block)) {
 				sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
 				c.in_sheet = true;
 				// The repeated block renders `c.repeat.block` per item: same styles, already in.
@@ -205,12 +206,12 @@ export class Plan {
 		if (!clashes.size) return sheet;
 		sheet = '';
 		for (const c of blocks) {
-			if (!c.in_sheet) continue;
 			if (clashes.has(c.id)) {
+				NO_SHEET.add(c.src); // (also out of a nested content's sheet: an inline symbol's own plan)
+				if (!c.in_sheet) continue;
 				c.in_sheet = false;
 				if (c.repeat) this.repeat_in_sheet.delete(c.repeat.block);
-				NO_SHEET.add(c.src); // (also out of a nested content's sheet: an inline symbol's own plan)
-			} else sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
+			} else if (c.in_sheet) sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
 		}
 		return sheet;
 	}
@@ -224,6 +225,25 @@ export class Plan {
 
 /** Blocks whose id clashes with another block's (Plan.unsheet): never in any plan's sheet. */
 const NO_SHEET = new WeakSet<BuilderBlock>();
+/**
+ * The blocks of inline symbols whose breakpoints differ from this content's. A symbol's blocks
+ * render in the symbol's own <Content>, styled by ITS sheet with ITS breakpoints: rules for them
+ * here would use the wrong media queries (and reach them, as they share the class names).
+ */
+function styled_elsewhere(found: BuilderBlock[], sizes: Sizes): Set<BuilderBlock> | null {
+	let out: Set<BuilderBlock> | null = null;
+	for (let i = 0; i < found.length; i++) {
+		const component = found[i].component;
+		if (component?.name !== 'Symbol') continue;
+		const content = (component.options?.symbol as { content?: BuilderContent } | undefined)?.content;
+		const blocks = content?.data?.blocks;
+		if (!blocks || sizes_for(content.meta?.breakpoints ?? {}) === sizes) continue; // (as Plan's)
+		const flags = { personalization: false, ab: false, symbols: false };
+		for (const block of find_blocks_guarded(blocks, new Set(), flags)) (out ??= new Set()).add(block);
+	}
+	return out;
+}
+
 /** Two equal values in `values` (sorted in place: comparing strings needs no hash per value). */
 function has_duplicates(values: unknown[]): boolean {
 	if (values.length < 2) return false;
@@ -332,6 +352,7 @@ function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: 
 		}
 		if (component) {
 			if (component.name === 'PersonalizationContainer') flags.personalization = true;
+			else if (component.name === 'Symbol') flags.symbols = true;
 			if (component.options) {
 				values.push(component.options);
 				owners.push(block);
@@ -365,6 +386,7 @@ function find_blocks_guarded(root: BuilderBlock[], localized: Set<BuilderBlock>,
 				const block = obj as BuilderBlock;
 				found.push(block);
 				if (block.component?.name === 'PersonalizationContainer') flags.personalization = true;
+				else if (block.component?.name === 'Symbol') flags.symbols = true;
 				for (const [v, o] of [
 					[block.options, null],
 					[block.component?.options, block],

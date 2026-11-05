@@ -353,4 +353,17 @@ write('feat-fuzz-data-blocks.json', { content: { id: 'content-data-blocks', data
 		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } })
 	]);
 }
+// An inline symbol's blocks are styled with the SYMBOL's breakpoints (its own <Content>), never the
+// page's: the page's sheet must not carry rules for them with the page's media queries.
+feat('fuzz-symbol-breakpoints', [
+	text('page', { responsiveStyles: { medium: { color: 'red' }, small: { color: 'blue' } } }),
+	{
+		'@type': E,
+		id: id(),
+		component: {
+			name: 'Symbol',
+			options: { symbol: { content: { id: 'sym-bp', data: { blocks: [text('in symbol', { responsiveStyles: { medium: { color: 'green' }, small: { color: 'pink' } } })] } } } }
+		}
+	}
+], { content: { meta: { breakpoints: { small: 500, medium: 900 } } } });
 console.log('feature fixtures written');
