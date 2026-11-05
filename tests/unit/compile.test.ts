@@ -147,13 +147,13 @@ describe('Plan.compile', () => {
 		expect(p.compile(copy).options.text).toBe('texte');
 	});
 
-	// BUG: the official SDK resolves every localized value inside a block's component.options, nested
-	// blocks' `properties` / `style` / `responsiveStyles` included (resolveLocalizedValues traverses
-	// the whole options tree and mutates in place). The content walk (find_blocks) only notes a
-	// localized value under some block's component.options, and pushes a found block's other fields
-	// with no owner, so a nested block whose ONLY localized value is in its properties leaves its
-	// container unresolved: the column's block renders `title="[object Object]"`.
-	it.fails("a nested block's localized properties are resolved (official resolveLocalizedValues)", () => {
+	// Regression: the official SDK resolves every localized value inside a block's component.options,
+	// nested blocks' `properties` / `style` / `responsiveStyles` included (resolveLocalizedValues
+	// traverses the whole options tree and mutates in place). The content walk (find_blocks) only noted
+	// a localized value under some block's component.options, and pushed a found block's other fields
+	// with no owner, so a nested block whose ONLY localized value was in its properties left its
+	// container unresolved: the column's block rendered `title="[object Object]"`.
+	it("a nested block's localized properties are resolved (official resolveLocalizedValues)", () => {
 		const nested: BuilderBlock = { '@type': EL, id: id('n'), properties: { title: { '@type': LOC, Default: 'd', fr: 'titre' } as unknown as string } };
 		const parent: BuilderBlock = { '@type': EL, id: id('p'), component: { name: 'Columns', options: { columns: [{ blocks: [nested] }] } } };
 		const official = resolveLocalizedValues(structuredClone(parent) as never, 'fr') as BuilderBlock;
@@ -693,6 +693,39 @@ describe('Plan.prepare: cycles in hand-built content', () => {
 		const p = plan({}, [pc]);
 		expect(p.flags).toEqual({ personalization: true, ab: true, symbols: true });
 		expect(p.compile(loc_block).options.text).toBe('D');
+	});
+});
+
+describe('localized values in a nested block outside its component options (regression)', () => {
+	const make = () => {
+		const nested: BuilderBlock = {
+			'@type': EL,
+			id: id('ln'),
+			properties: { title: { '@type': LOC, Default: 'd', fr: 'titre' } as unknown as string },
+			responsiveStyles: { large: { color: { '@type': LOC, Default: 'blue', fr: 'red' } as unknown as string } }
+		};
+		const parent: BuilderBlock = { '@type': EL, id: id('lp'), component: { name: 'Columns', options: { columns: [{ blocks: [nested] }] } } };
+		return { nested, parent };
+	};
+
+	it('a full render shows the resolved title and color, as the official', async () => {
+		const { render } = await import('svelte/server');
+		const { Content } = await import('../../src/lib/index.js');
+		const { parent, nested } = make();
+		const { body, head } = render(Content, { props: { model: 'page', apiKey: 'k', locale: 'fr', canTrack: false, content: { id: 'c', data: { blocks: [parent] } } as never } });
+		const html = head + body;
+		expect(html).toContain('title="titre"');
+		expect(html).toMatch(new RegExp(`\\.${nested.id} \\{\\s*color: red;`));
+		expect(html).not.toContain('[object Object]');
+	});
+
+	it('the guarded walk (content with a cycle) marks the holder too', () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const { parent } = make();
+		parent.component!.options!.self = parent;
+		const p = plan({ locale: 'fr' }, [parent]);
+		const copy = (p.compile(parent).options.columns as Array<{ blocks: BuilderBlock[] }>)[0].blocks[0];
+		expect(p.compile(copy).attrs.title).toBe('titre');
 	});
 });
 

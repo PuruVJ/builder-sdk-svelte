@@ -58,8 +58,22 @@ export function source_block<T extends object>(block: T): T {
 	return (copied_from.get(block) as T | undefined) ?? block;
 }
 
+/** The objects `walk` is inside: a cycle (only in hand-built content) is left as it is, as the
+ *  official traverse (a visited set) leaves it, instead of overflowing the stack. */
+const active = new Set<object>();
+
 function walk(value: unknown, locale: string): unknown {
 	if (value === null || typeof value !== 'object') return value;
+	if (active.has(value)) return value;
+	active.add(value);
+	try {
+		return walk_object(value, locale);
+	} finally {
+		active.delete(value);
+	}
+}
+
+function walk_object(value: object, locale: string): unknown {
 	const obj = value as Record<string, unknown>;
 	// (the official walk also descends into the localized object it replaced: so does this)
 	if (obj['@type'] === LOCALIZED_TYPE) return walk(obj[locale], locale) ?? undefined;
@@ -148,6 +162,9 @@ export function mark_option_owners(root: unknown[], localized: Set<object>, budg
 			}
 			continue;
 		}
+		// A localized value anywhere under a block's options (a nested block's properties or styles
+		// too: the official walks those options whole) is owned by every block up the chain.
+		if (obj['@type'] === LOCALIZED_TYPE) for (let c: Chain = chain; c && !localized.has(c.block); c = c.up) localized.add(c.block);
 		for (const key in obj) {
 			values.push(obj[key]);
 			chains.push(chain);

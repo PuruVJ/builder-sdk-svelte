@@ -207,10 +207,10 @@ describe('resolve_localized behaviour', () => {
 		expect(warn).toHaveBeenCalledTimes(2);
 	});
 
-	// BUG: `walk` recurses with no record of what it is inside, so options with a cycle (hand-built
-	// content) overflow the stack: a full render of such a block throws `Maximum call stack size
-	// exceeded`, where the official traverse (a visited WeakSet) resolves it.
-	it.fails('options with a cycle resolve (the official traverse tracks what it visited)', () => {
+	// Regression: `walk` recursed with no record of what it was inside, so options with a cycle
+	// (hand-built content) overflowed the stack: a full render of such a block threw `Maximum call
+	// stack size exceeded`, where the official traverse (a visited WeakSet) resolves it.
+	it('options with a cycle resolve (the official traverse tracks what it visited)', () => {
 		const n: Obj = { k: 1 };
 		n.self = n;
 		const options = { a: loc({ fr: 'v' }), n };
@@ -381,13 +381,13 @@ describe('mark_option_owners', () => {
 		}
 	});
 
-	// BUG: a block nested in another block's options with a localized value OUTSIDE its component
-	// options (its responsiveStyles, properties, …) is resolved by the official walk of the holder's
-	// options (it walks the nested block whole). mark_option_owners only spreads ownership up from blocks
-	// already in `localized`, and compile.ts's content walk only notes values in component options, so
-	// the holder is never marked and ships the nested block unresolved: a Columns column block with a
-	// localized color / title renders with no color / no title (official: resolved).
-	it.fails('a localized value in a nested block\'s styles marks its holder', () => {
+	// Regression: a block nested in another block's options with a localized value OUTSIDE its
+	// component options (its responsiveStyles, properties, …) is resolved by the official walk of the
+	// holder's options (it walks the nested block whole). mark_option_owners only spread ownership up
+	// from blocks already in `localized`, and compile.ts's content walk only noted values in component
+	// options, so the holder was never marked and shipped the nested block unresolved: a Columns column
+	// block with a localized color / title rendered with no color / no title (official: resolved).
+	it('a localized value in a nested block\'s styles marks its holder', () => {
 		const inner = block('builder-in', { t: 'plain' }, { responsiveStyles: { large: { color: loc({ fr: 'red' }) } } });
 		const outer = block('builder-out', { columns: [{ blocks: [inner] }] });
 		const unrelated = block('builder-other', { t: loc({ fr: 'x' }) });

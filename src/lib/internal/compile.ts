@@ -354,7 +354,7 @@ function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: 
 		// visited after this block: children, then component options, then block options
 		if (block.options) {
 			values.push(block.options);
-			owners.push(null);
+			owners.push(owner);
 			listed.push(false);
 		}
 		if (component) {
@@ -368,8 +368,20 @@ function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: 
 		}
 		if (block.children) {
 			values.push(block.children);
-			owners.push(null);
+			owners.push(owner);
 			listed.push(false);
+		}
+		// A block inside another block's component options: the official resolves the holder's
+		// options WHOLE, so a localized value in any field of this block (properties, styles…) is
+		// the holder's too.
+		if (owner) for (const key in obj) {
+			if (key === 'component' || key === 'children' || key === 'options') continue;
+			const v = obj[key];
+			if (typeof v === 'object' && v !== null) {
+				values.push(v);
+				owners.push(owner);
+				listed.push(false);
+			}
 		}
 	}
 	return found;
@@ -394,14 +406,24 @@ function find_blocks_guarded(root: BuilderBlock[], localized: Set<BuilderBlock>,
 				found.push(block);
 				if (block.component?.name === 'PersonalizationContainer') flags.personalization = true;
 				else if (block.component?.name === 'Symbol') flags.symbols = true;
+				// (as find_blocks: inside a holder's options, every field of the block is the holder's)
 				for (const [v, o] of [
-					[block.options, null],
+					[block.options, owner],
 					[block.component?.options, block],
-					[block.children, null]
+					[block.children, owner]
 				] as const)
 					if (v && typeof v === 'object') {
 						values.push(v);
 						owners.push(o);
+					}
+				if (owner)
+					for (const key in obj) {
+						if (key === 'component' || key === 'children' || key === 'options') continue;
+						const v = obj[key];
+						if (typeof v === 'object' && v !== null) {
+							values.push(v);
+							owners.push(owner);
+						}
 					}
 				continue;
 			}
