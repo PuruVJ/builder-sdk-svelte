@@ -8,8 +8,7 @@
 
 	let { compiled, scope }: { compiled: Compiled; scope: Scope } = $props();
 	const items = $derived((scope.ctx.version(), repeat_scopes(compiled, scope)));
-	// svelte-ignore state_referenced_locally
-	const item_block = compiled.repeat!.block;
+	const item_block = $derived(compiled.repeat!.block);
 </script>
 
 {#if items?.length}

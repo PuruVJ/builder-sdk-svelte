@@ -124,7 +124,8 @@ function kind_of(c: Compiled, plan: Plan): number {
  * block per plan (cached on the compiled record, with every plain subtree met on the way).
  */
 export function plain_html(plan: Plan, root: Compiled): string | null {
-	if (!PLAIN.on) return null;
+	// (live: the editor changes blocks under a mounted tree — every block stays a keyed, live block)
+	if (!PLAIN.on || plan.live) return null;
 	if (root.html !== undefined) return root.html;
 	// Pre-order walk with an explicit stack; then fill in REVERSE pre-order, so every child's string
 	// exists before its parent's. No recursion at any depth.

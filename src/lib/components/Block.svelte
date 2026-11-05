@@ -29,6 +29,7 @@
 	import Bound from './Bound.svelte';
 	import Repeat from './Repeat.svelte';
 	import Awaiter from './Awaiter.svelte';
+	import Retry from './Retry.svelte';
 
 	export { view };
 
@@ -40,11 +41,23 @@
 	/** The shape a block renders as (its compiled record final: static, or a bound block's copy). */
 	function shape_of(c: Compiled, scope: Scope) {
 		if (!c.visible) return null;
+		// Live (the editor): a component that throws takes down only its own block, not the page.
+		if (scope.ctx.plan.live && c.comp?.component) {
+			if (c.no_wrap) return guarded_s;
+			if (c.is_link && scope.ctx.link_component) return link_guarded_s;
+			if (c.empty_tag) return empty_s;
+			if (c.tag === 'div') return div_guarded_s;
+			return element_guarded_s;
+		}
 		if (c.no_wrap) return c.comp?.component ? component_s : null;
 		if (c.is_link && scope.ctx.link_component) return link_s;
 		if (c.empty_tag) return empty_s;
 		if (c.tag === 'div') return c.comp?.component ? div_comp_s : div_kids_s;
 		return element_s;
+	}
+
+	function report(error: unknown) {
+		console.error('[Builder.io]: a component failed to render; its block is left empty until it changes:', error);
 	}
 
 	/** A static block: its whole subtree as one string when nothing in it has behaviour. */
@@ -78,15 +91,15 @@
 	// svelte-ignore state_referenced_locally
 	const scope = scope_prop;
 
-	// Read once: a block's content and scope do not change under a mounted block (a content change
-	// re-keys the whole <Content>). svelte-ignore: deliberate non-reactive reads.
-	// svelte-ignore state_referenced_locally
-	const compiled = scope.ctx.plan.compile(block);
+	// Static content never changes under a mounted block (a new content re-keys the whole <Content>),
+	// so this derives once. Live (the editor), a list keyed by id hands an edited block to the same
+	// instance: it re-derives — and an untouched block is the same object, a compile cache hit.
+	const compiled = $derived(scope.ctx.plan.compile(block));
 	// A repeat item is its own state layer: <Blocks> inside its components must see the item's scope
 	// (the official RepeatedBlock sets a new context per item).
 	// svelte-ignore state_referenced_locally
 	if (item) provide_scope(() => scope);
-	// Animations bind after mount — a lifecycle hook only for a block that has them.
+	// Animations bind after mount — a lifecycle hook only for a block that has them (as first rendered).
 	// svelte-ignore state_referenced_locally
 	if (compiled.src.animations?.length && compiled.id) {
 		const id = compiled.id;
@@ -144,7 +157,7 @@
 {#snippet div_kids_s(c, scope)}
 	<!-- Also an entry registered WITHOUT a component (an app "removing" a built-in): the wrapper and
 	     the block's children, like the official SDK. -->
-	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (child)}{@render view(child, scope)}{/each}</div>
+	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}</div>
 {/snippet}
 
 {#snippet div_comp_s(c, scope)}
@@ -168,8 +181,29 @@
 	{#if c.comp?.component}
 		{@render component_s(c, scope)}
 	{:else}
-		{#each c.children as child (child)}{@render view(child, scope)}{/each}
+		{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}
 	{/if}
+{/snippet}
+
+<!-- live only (shape_of): the same shapes, the component in a boundary -->
+{#snippet guarded_s(c, scope)}
+	<svelte:boundary onerror={report}>
+		{@render component_s(c, scope)}
+		{#snippet failed(_error, reset)}<Retry {c} {reset} />{/snippet}
+	</svelte:boundary>
+{/snippet}
+
+{#snippet div_guarded_s(c, scope)}
+	<div {...wrapper_attrs(c, scope, false)}>{@render guarded_s(c, scope)}</div>
+{/snippet}
+
+{#snippet element_guarded_s(c, scope)}
+	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)}>{@render guarded_s(c, scope)}</svelte:element>
+{/snippet}
+
+{#snippet link_guarded_s(c, scope)}
+	{@const Tag = scope.ctx.link_component}
+	<Tag {...wrapper_attrs(c, scope, true)}>{@render guarded_s(c, scope)}</Tag>
 {/snippet}
 
 {#snippet component_s(c, scope)}
@@ -177,11 +211,11 @@
 	{@const Comp = c.comp.component}
 	{#if Comp.load}
 		<Awaiter load={Comp.load} fallback={Comp.fallback} props={component_props(c, scope)}>
-			{#each c.children as child (child)}{@render view(child, scope)}{/each}
+			{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}
 		</Awaiter>
 	{:else}
 		<Comp {...component_props(c, scope)}>
-			{#each c.children as child (child)}{@render view(child, scope)}{/each}
+			{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}
 		</Comp>
 	{/if}
 {/snippet}

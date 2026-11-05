@@ -11,9 +11,9 @@ import {
 	create_register_component_message,
 	register as register_editor,
 	register_action,
-	set_editor_settings
+	set_editor_settings,
+	subscribe_to_editor
 } from './internal/editor.js';
-import { load_official } from './internal/official.js';
 import { track as track_event, type TrackEvent } from './internal/track.js';
 import { set_user_attributes } from './internal/user-attributes.js';
 
@@ -35,7 +35,6 @@ export type {
 	RegisteredComponents,
 	RegisteredComponent as ComponentInfo
 } from './types.js';
-// @ts-ignore optional peer
 export type {
 	BlocksProps,
 	BuilderContextInterface,
@@ -51,7 +50,7 @@ export type {
 	SymbolProps,
 	TextProps,
 	VideoProps
-} from '@builder.io/sdk-svelte/bundle/browser';
+} from './types.js';
 
 export const isEditing = is_editing;
 export const isPreviewing = is_previewing;
@@ -87,17 +86,6 @@ export const registerAction = register_action;
 export const setEditorSettings = set_editor_settings;
 export const createRegisterComponentMessage = create_register_component_message;
 
-/** official `subscribeToEditor`: content updates of `model` from the editor; runs in the official SDK so its editor setup is shared. */
-export function subscribeToEditor(args: { model: string; apiKey: string; callback: (content: BuilderContent) => void; trustedHosts?: string[] }): () => void {
-	if (!is_browser()) return () => {};
-	let stop: (() => void) | undefined;
-	let stopped = false;
-	load_official().then((m) => {
-		if (m && !stopped) stop = m.subscribeToEditor(args);
-	});
-	return () => {
-		stopped = true;
-		stop?.();
-	};
-}
+/** official `subscribeToEditor`: content updates of `model` from the editor; call the returned function to stop. */
+export const subscribeToEditor = subscribe_to_editor;
 export type { GetContentOptions };

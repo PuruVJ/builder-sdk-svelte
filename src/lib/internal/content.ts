@@ -69,13 +69,32 @@ export function plan_of(input: ContentInput): Plan {
 	);
 }
 
+/**
+ * The plan a LIVE content renders from (editor / preview, internal/live.ts): one per `<Content>`
+ * instance (`owner`), outliving every edit, so a block the edit left untouched stays compiled.
+ */
+export function live_plan_of(owner: object, input: ContentInput, content: BuilderContent | undefined): Plan {
+	return plan_for(
+		owner,
+		{
+			registry: registry_for(input.customComponents),
+			model: input.model,
+			locale: input.locale,
+			breakpoints: content?.meta?.breakpoints,
+			live: true
+		},
+		undefined
+	);
+}
+
 export function create_content(
 	input: ContentInput,
 	version: () => number,
-	bump: () => void
+	bump: () => void,
+	live_owner?: object
 ): { ctx: ContentCtx; scope: Scope } {
 	const content = merged_content(input.content, input.data);
-	const plan = plan_of(input);
+	const plan = live_owner ? live_plan_of(live_owner, input, content) : plan_of(input);
 	const registry = plan.registry;
 	let root = initial_root_state(input.content, input.data, input.locale);
 	let initializing = true;
@@ -126,6 +145,7 @@ export function create_content(
 		blocks_wrapper_props: input.blocksWrapperProps ?? {},
 		version,
 		bump,
+		listeners: new Set(),
 		root_set_state(next) {
 			root = next;
 			// A write while this content is being set up (jsCode) is read by the first render; only a

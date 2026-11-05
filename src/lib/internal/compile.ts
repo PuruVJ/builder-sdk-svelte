@@ -67,6 +67,13 @@ export interface PlanOptions {
 	model: string;
 	locale: string | undefined;
 	breakpoints: { xsmall?: number; small?: number; medium?: number } | undefined;
+	/**
+	 * The editor / preview leg (internal/live.ts): the content changes under a mounted tree. The plan
+	 * outlives every edit (an untouched block stays a cache hit), so it keeps no page-wide shape: no
+	 * one sheet (each block carries its own style tag, which follows its edits), no plain-string
+	 * subtrees, and lists are keyed by block id so an edited block updates in place.
+	 */
+	live?: boolean;
 }
 
 export class Plan {
@@ -76,6 +83,7 @@ export class Plan {
 	readonly locale: string | undefined;
 	readonly sizes: Sizes;
 	readonly has_xsmall: boolean;
+	readonly live: boolean;
 	readonly compiled = new WeakMap<BuilderBlock, Compiled>();
 	/** Repeated blocks (the per-item copy without `repeat`) whose rules are in {@link sheet}; every
 	 *  other block carries that on its compiled record (`in_sheet`), no lookup needed. */
@@ -91,6 +99,35 @@ export class Plan {
 		this.locale = opts.locale;
 		this.sizes = sizes_for(opts.breakpoints ?? {});
 		this.has_xsmall = Boolean(opts.breakpoints?.xsmall);
+		this.live = opts.live === true;
+	}
+
+	#keys: WeakMap<object, Map<BuilderBlock, unknown>> | undefined;
+
+	/**
+	 * A block's key in a list's keyed each. Static: the block object itself. Live: its id (a list
+	 * re-sent by the editor is all new objects; the id is what stays), made unique within the list —
+	 * a duplicated or missing id must never collide (`#index`, `id~n`).
+	 */
+	key(list: readonly unknown[], block: BuilderBlock): unknown {
+		if (!this.live) return block;
+		const keys_by_list = (this.#keys ??= new WeakMap());
+		let keys = keys_by_list.get(list);
+		if (!keys) {
+			keys = new Map();
+			const seen = new Map<string, number>();
+			for (let i = 0; i < list.length; i++) {
+				const b = list[i] as BuilderBlock;
+				if (keys.has(b)) continue;
+				let key = typeof b?.id === 'string' && b.id !== '' ? b.id : '#' + i;
+				const n = seen.get(key) ?? 0;
+				seen.set(key, n + 1);
+				if (n) key += '~' + n;
+				keys.set(b, key);
+			}
+			keys_by_list.set(list, keys);
+		}
+		return keys.get(block) ?? block;
 	}
 
 	/** The block's compiled record (cached for the life of the plan). */
@@ -121,7 +158,7 @@ export class Plan {
 	 * compiles without the localized-value walk of its options.
 	 */
 	prepare(blocks: BuilderBlock[] | undefined): void {
-		if (!blocks) return;
+		if (!blocks || this.live) return;
 		const localized = new Set<BuilderBlock>();
 		const found = find_blocks(blocks, localized, this.flags, MAX_VISITS) ?? find_blocks_guarded(blocks, localized, this.flags);
 		const any_localized = localized.size > 0; // most content has none: no lookup per block
@@ -438,7 +475,7 @@ export function plan_for(key_obj: object, opts: PlanOptions, blocks: BuilderBloc
 	let rid = registry_ids.get(opts.registry);
 	if (rid === undefined) registry_ids.set(opts.registry, (rid = next_registry_id++));
 	const bp = opts.breakpoints;
-	const key = `${rid}|${opts.model}|${opts.locale ?? ''}|${bp ? `${bp.xsmall}|${bp.small}|${bp.medium}` : ''}`;
+	const key = `${rid}|${opts.model}|${opts.locale ?? ''}|${bp ? `${bp.xsmall}|${bp.small}|${bp.medium}` : ''}${opts.live ? '|live' : ''}`;
 	let by_key = plans.get(key_obj);
 	if (!by_key) plans.set(key_obj, (by_key = new Map()));
 	let plan = by_key.get(key);

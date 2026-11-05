@@ -37,6 +37,8 @@ export interface ContentCtx {
 	/** The reactive render version (client): bumped when root state changes. */
 	version(): number;
 	bump(): void;
+	/** `builderContext` stores with a subscriber, told when the content or root state changes. */
+	listeners: Set<() => void>;
 	root_set_state(next: Record<string, unknown>): void;
 }
 
@@ -89,7 +91,10 @@ export class Scope implements EvalScope {
 		if (this.#store) return this.#store;
 		const ctx = this.ctx;
 		const value: Record<string | symbol, unknown> = {
-			content: ctx.content,
+			// (live in the editor: a getter, in the official key order)
+			get content() {
+				return ctx.content;
+			},
 			localState: this.local,
 			rootSetState: (next: Record<string, unknown>) => ctx.root_set_state(next),
 			context: ctx.context,
@@ -110,8 +115,15 @@ export class Scope implements EvalScope {
 			enumerable: true,
 			get: () => component_infos(ctx.registry.as_object(ctx.model))
 		});
-		this.#store = writable(value as Record<string, unknown>);
-		return this.#store;
+		// The public contract is a Svelte store (custom components read `$builderContext`): it re-emits
+		// when the content or root state changes, and costs nothing until something subscribes.
+		const store: Writable<Record<string, unknown>> = writable(value as Record<string, unknown>, (set) => {
+			const notify = () => set(value as Record<string, unknown>);
+			ctx.listeners.add(notify);
+			return () => ctx.listeners.delete(notify);
+		});
+		this.#store = store;
+		return store;
 	}
 }
 
