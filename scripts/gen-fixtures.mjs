@@ -337,4 +337,20 @@ write('feat-fuzz-data-blocks.json', { content: { id: 'content-data-blocks', data
 	];
 	feat('fuzz-nested-localized', nested_loc, { props: { locale: 'fr-FR' }, content: {} });
 }
+// Duplicate block ids (an id is a class name): the styles of a block that never renders must not
+// reach the block that does — not from the one sheet, and not across an inline symbol's content.
+{
+	const dup = (id, extra = {}) => ({ '@type': E, id, ...extra });
+	feat('fuzz-duplicate-ids', [
+		dup('builder-dup-a', { children: [text('rendered a')] }),
+		dup('builder-hidden', { hide: true, children: [dup('builder-dup-a', { responsiveStyles: { large: { color: 'red' } } })] }),
+		dup('builder-dup-b', { responsiveStyles: { large: { color: 'blue' } } }),
+		dup('builder-unknown', { component: { name: 'Gen - Unregistered', options: { items: [dup('builder-dup-b', { responsiveStyles: { large: { color: 'green' } } })] } } }),
+		dup('builder-dup-c', {
+			component: { name: 'Symbol', options: { symbol: { content: { id: 'sym-dup', data: { blocks: [dup('builder-x', { hide: true, children: [dup('builder-dup-c', { responsiveStyles: { large: { margin: '1px' } } })] })] } } } } }
+		}),
+		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } }),
+		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } })
+	]);
+}
 console.log('feature fixtures written');

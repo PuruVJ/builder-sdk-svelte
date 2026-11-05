@@ -166,19 +166,53 @@ export class Plan {
 		const any_localized = localized.size > 0; // most content has none: no lookup per block
 		if (any_localized) mark_option_owners(blocks, localized, MAX_VISITS);
 		let sheet = '';
+		// A block's id is its class name, so a rule in the sheet styles every element with that id —
+		// also one rendered by ANOTHER block with the same id, when the block it was written for never
+		// renders. Duplicate ids are rare: they are found by a sort (no hashing per block), and only
+		// then is the sheet rebuilt without the ids whose blocks disagree on styles (see unsheet).
+		const ids: unknown[] = [];
 		for (let i = 0; i < found.length; i++) {
 			const block = found[i];
 			if (this.compiled.has(block)) continue; // the same object reached twice
 			const c = compile_block(block, this, !(any_localized && localized.has(block)), block.tagName);
 			this.compiled.set(block, c);
-			if (!c.bindings && c.css) {
+			if (c.id !== undefined) ids.push(c.id);
+			if (!c.bindings && c.css && !NO_SHEET.has(block)) {
 				sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
 				c.in_sheet = true;
 				// The repeated block renders `c.repeat.block` per item: same styles, already in.
 				if (c.repeat) this.repeat_in_sheet.add(c.repeat.block);
 			}
 		}
-		this.sheet = sheet;
+		this.sheet = has_duplicates(ids) ? this.unsheet(found, sheet) : sheet;
+	}
+
+	/** `sheet` without the rules of blocks whose id another block shares with different styles: each
+	 *  of those renders its own style tag, as in the official SDK. */
+	private unsheet(found: BuilderBlock[], sheet: string): string {
+		const styles_by_id = new Map<unknown, string>();
+		const clashes = new Set<unknown>();
+		const blocks = new Set<Compiled>();
+		for (let i = 0; i < found.length; i++) {
+			const c = this.compiled.get(found[i])!;
+			if (c.id === undefined || blocks.has(c)) continue;
+			blocks.add(c);
+			const styles = c.bindings ? BOUND_STYLES : c.css;
+			const seen = styles_by_id.get(c.id);
+			if (seen === undefined) styles_by_id.set(c.id, styles);
+			else if (seen !== styles || styles === BOUND_STYLES) clashes.add(c.id);
+		}
+		if (!clashes.size) return sheet;
+		sheet = '';
+		for (const c of blocks) {
+			if (!c.in_sheet) continue;
+			if (clashes.has(c.id)) {
+				c.in_sheet = false;
+				if (c.repeat) this.repeat_in_sheet.delete(c.repeat.block);
+				NO_SHEET.add(c.src); // (also out of a nested content's sheet: an inline symbol's own plan)
+			} else sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
+		}
+		return sheet;
 	}
 
 	/** Compile a block without caching (a bound block's per-render copy). Its tag is `tag_name`: the
@@ -187,6 +221,19 @@ export class Plan {
 		return compile_block(block, this, false, tag_name);
 	}
 }
+
+/** Blocks whose id clashes with another block's (Plan.unsheet): never in any plan's sheet. */
+const NO_SHEET = new WeakSet<BuilderBlock>();
+/** Two equal values in `values` (sorted in place: comparing strings needs no hash per value). */
+function has_duplicates(values: unknown[]): boolean {
+	if (values.length < 2) return false;
+	values.sort();
+	for (let i = 1; i < values.length; i++) if (values[i] === values[i - 1]) return true;
+	return false;
+}
+
+/** What a bound block's styles count as when ids are compared: never equal (they depend on state). */
+const BOUND_STYLES = '\0bound';
 
 /** Objects one content walk may visit before it assumes a cycle (a 4 MB page has ~200 000). */
 const MAX_VISITS = 1 << 23;
