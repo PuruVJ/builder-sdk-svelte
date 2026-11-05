@@ -7,7 +7,9 @@
 	import Block from './Block.svelte';
 
 	let { compiled, scope }: { compiled: Compiled; scope: Scope } = $props();
-	const items = $derived((scope.ctx.version(), repeat_scopes(compiled, scope)));
+	// (one scope per index for this repeat's life: see repeat_scopes)
+	const reuse: Scope[] = [];
+	const items = $derived((scope.ctx.version(), repeat_scopes(compiled, scope, reuse)));
 	const item_block = $derived(compiled.repeat!.block);
 </script>
 

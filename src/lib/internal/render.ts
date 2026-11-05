@@ -62,10 +62,23 @@ export function component_props(c: Compiled, scope: Scope): Record<string, unkno
 	return props;
 }
 
-/** A repeated block's items (official `getRepeatItemData`), or null when not an array. */
-export function repeat_scopes(c: Compiled, scope: Scope): Scope[] | null {
+/**
+ * A repeated block's items (official `getRepeatItemData`), or null when not an array.
+ *
+ * `reuse` (a mounted repeat): one scope per index, kept across renders and re-pointed at the item
+ * now at that index. The block mounted for an index holds its scope for life, so a list reordered or
+ * replaced at the same length must change what that scope reads (official RepeatedBlock is keyed
+ * by index and re-renders it with the new item).
+ */
+export function repeat_scopes(c: Compiled, scope: Scope, reuse?: Scope[]): Scope[] | null {
 	const r = c.repeat!;
 	const items = run(r.fn, scope, r.code);
 	if (!Array.isArray(items)) return null;
-	return items.map((item, i) => scope.item(r.item_name, item, i));
+	if (!reuse) return items.map((item, i) => scope.item(r.item_name, item, i));
+	for (let i = 0; i < items.length; i++) {
+		if (reuse[i]) reuse[i].retarget(scope, r.item_name, items[i], i);
+		else reuse[i] = scope.item(r.item_name, items[i], i);
+	}
+	reuse.length = items.length;
+	return reuse.slice();
 }

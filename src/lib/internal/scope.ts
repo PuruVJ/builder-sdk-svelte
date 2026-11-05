@@ -42,6 +42,11 @@ export interface ContentCtx {
 	root_set_state(next: Record<string, unknown>): void;
 }
 
+/** A repeat item's state layer over its parent's (official `getRepeatItemData`). */
+function item_layer(parent: Record<string, unknown> | undefined, name: string, item: unknown, index: number): Record<string, unknown> {
+	return { ...parent, $index: index, $item: item, [name]: item, [`$${name}Index`]: index };
+}
+
 export class Scope implements EvalScope {
 	readonly ctx: ContentCtx;
 	readonly local: Record<string, unknown> | undefined;
@@ -77,13 +82,20 @@ export class Scope implements EvalScope {
 
 	/** A repeat item's scope (official `getRepeatItemData`). */
 	item(name: string, item: unknown, index: number): Scope {
-		return new Scope(this.ctx, {
-			...this.local,
-			$index: index,
-			$item: item,
-			[name]: item,
-			[`$${name}Index`]: index
-		});
+		return new Scope(this.ctx, item_layer(this.local, name, item, index));
+	}
+
+	/**
+	 * Points this repeat item's scope (made by `parent.item`) at the item now at its index — the list
+	 * changed (reordered, items replaced). In place: the block mounted for this index, and anything
+	 * holding this layer (its `builderContext`, a nested <Blocks>), read the new item.
+	 */
+	retarget(parent: Scope, name: string, item: unknown, index: number): void {
+		const next = item_layer(parent.local, name, item, index);
+		const local = this.local!;
+		for (const key in local) if (!(key in next)) delete local[key];
+		Object.assign(local, next);
+		this.#state = undefined;
 	}
 
 	/** The `builderContext` store (official `BuilderContextInterface`), built on first request. */
