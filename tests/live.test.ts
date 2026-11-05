@@ -73,10 +73,19 @@ describe('reconcile', () => {
 	});
 
 	it('survives very deep content', () => {
-		let prev: any = { v: 0 };
-		for (let i = 0; i < 20000; i++) prev = { child: prev };
-		const next = fresh(prev);
-		expect(() => reconcile(prev, next)).not.toThrow();
+		// (built by loops: JSON.stringify itself overflows at this depth on a small stack, e.g. Linux CI)
+		const chain = () => {
+			let v: any = { v: 0 };
+			for (let i = 0; i < 20000; i++) v = { child: v };
+			return v;
+		};
+		const prev = chain();
+		const next = chain();
+		let out: any;
+		expect(() => (out = reconcile(prev, next))).not.toThrow();
+		let depth = 0;
+		for (let v = out; v.child; v = v.child) depth++;
+		expect(depth).toBe(20000);
 	});
 
 	it('fuzz: the result always deep-equals the new content and never mutates either side', () => {
