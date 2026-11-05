@@ -43,6 +43,8 @@
 		trustedHosts?: string[];
 		nonce?: string;
 		isNestedRender?: boolean;
+		/** (internal: a symbol inside a live tree — a client render, never hydrating — starts live) */
+		startLive?: boolean;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -65,14 +67,16 @@
 
 	// Inside Builder, after mount: the view is rendered again, live (never while hydrating — the
 	// server rendered the static shape).
-	let live = $state(false);
+	// svelte-ignore state_referenced_locally
+	let live = $state(props.startLive === true);
 
 	// a new content object (even with the same id), another winning variation, or going live
 	// re-renders the view
 	let view_key = {};
 	let keyed_content: unknown = undefined;
 	let keyed_variation: unknown = undefined;
-	let keyed_live = false;
+	// svelte-ignore state_referenced_locally
+	let keyed_live = live;
 	const content_key = $derived.by(() => {
 		const c = props.content;
 		const v = default_content?.testVariationId;
@@ -85,9 +89,14 @@
 		return view_key;
 	});
 
+	const view_props = $derived.by(() => {
+		const { startLive: _, ...rest } = props;
+		return rest;
+	});
+
 	onMount(() => {
 		render_variants = false;
-		if (is_authoring()) live = true;
+		if (!live && is_authoring()) live = true;
 	});
 </script>
 
@@ -112,9 +121,9 @@
 		)
 	)}
 	{#each variants as variant}
-		<ContentView {...props} content={variant} showContent={false} isSsrAbTest={true} />
+		<ContentView {...view_props} content={variant} showContent={false} isSsrAbTest={true} />
 	{/each}
 {/if}
 {#key content_key}
-	<ContentView {...props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} />
+	<ContentView {...view_props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} />
 {/key}

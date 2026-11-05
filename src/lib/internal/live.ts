@@ -29,7 +29,14 @@ export function merge_content(current: BuilderContent | undefined, next: Builder
 }
 
 /** Deeper than this the content is taken as new (no sharing) instead of risking the stack. */
-const MAX_DEPTH = 4000;
+const MAX_DEPTH = 1500;
+
+/** A block id worth matching by: a string or a number (content is data — an id can be anything). */
+function id_of(v: unknown): string | number | undefined {
+	if (typeof v !== 'object' || v === null) return undefined;
+	const id = (v as { id?: unknown }).id;
+	return typeof id === 'string' || typeof id === 'number' ? id : undefined;
+}
 
 function is_plain(v: object): boolean {
 	const proto = Object.getPrototypeOf(v);
@@ -43,7 +50,13 @@ function is_plain(v: object): boolean {
  * Never mutates either side.
  */
 export function reconcile<T>(prev: unknown, next: T): T {
-	return share(prev, next, 0) as T;
+	try {
+		return share(prev, next, 0) as T;
+	} catch (error) {
+		// (a stack already deep when called: no sharing is always correct, just slower)
+		if (error instanceof RangeError) return next;
+		throw error;
+	}
 }
 
 function share(prev: unknown, next: unknown, depth: number): unknown {
@@ -53,7 +66,7 @@ function share(prev: unknown, next: unknown, depth: number): unknown {
 	if (Array.isArray(next)) {
 		if (!Array.isArray(prev)) return next;
 		let same = prev.length === next.length;
-		let by_id: Map<unknown, unknown[]> | undefined;
+		let by_id: Map<string | number, unknown[]> | undefined;
 		// Each old item is matched at most once: two new blocks with the same id (duplicated content)
 		// must never become the same object — one list would then hold one object twice.
 		let used: Set<unknown> | undefined;
@@ -61,12 +74,12 @@ function share(prev: unknown, next: unknown, depth: number): unknown {
 		for (let i = 0; i < next.length; i++) {
 			const n = next[i];
 			let p: unknown = prev[i];
-			const id = typeof n === 'object' && n !== null ? (n as { id?: unknown }).id : undefined;
-			if (id !== undefined && (typeof p !== 'object' || p === null || (p as { id?: unknown }).id !== id)) {
+			const id = id_of(n);
+			if (id !== undefined && id_of(p) !== id) {
 				if (!by_id) {
 					by_id = new Map();
 					for (const item of prev) {
-						const item_id = typeof item === 'object' && item !== null ? (item as { id?: unknown }).id : undefined;
+						const item_id = id_of(item);
 						if (item_id === undefined) continue;
 						const same_id = by_id.get(item_id);
 						if (same_id) same_id.push(item);

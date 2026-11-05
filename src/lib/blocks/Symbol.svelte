@@ -3,6 +3,7 @@
 	import { untrack } from 'svelte';
 	import { get, type Writable } from 'svelte/store';
 	import { reconcile } from '../internal/live.js';
+	import { scope_of_store } from '../internal/scope.js';
 	import type { BuilderBlock, BuilderContent, RegisteredComponents } from '../types.js';
 	import { all_attrs } from './helpers.js';
 	import { fetch_one_entry } from '../internal/fetch.js';
@@ -39,6 +40,9 @@
 
 	// svelte-ignore state_referenced_locally
 	const ctx = get(builderContext);
+	// Inside a live tree (the editor) this is a client render: the symbol's content starts live too.
+	// svelte-ignore state_referenced_locally
+	const live_parent = scope_of_store(builderContext)?.ctx.plan.live === true;
 	// The content: the inline one, until a fetched one (for the entry asked) arrives.
 	let fetched: BuilderContent | undefined = $state.raw();
 	// svelte-ignore state_referenced_locally
@@ -99,6 +103,7 @@
 	<Content
 		nonce={ctx.nonce}
 		isNestedRender={true}
+		startLive={live_parent}
 		apiVersion={ctx.apiVersion}
 		apiKey={symbol?.global && symbol?.ownerId ? symbol.ownerId : ctx.apiKey}
 		context={{ ...ctx.context, symbolId: builderBlock?.id }}
