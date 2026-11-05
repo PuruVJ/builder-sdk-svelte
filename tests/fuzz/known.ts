@@ -76,11 +76,9 @@ const RULES: Rule[] = [
 		why: 'duplicate block id across A/B variations, on a block that never renders (README: Known differences)',
 		test: (spec, failure) => {
 			if (failure.kind !== 'css-extra' || !spec.content.variations) return false;
-			const in_default = JSON.stringify(spec.content.data ?? {});
-			const in_variations = JSON.stringify(spec.content.variations);
-			return [...failure.detail.matchAll(CLASS_ID_RE)].every(
-				(m) => in_default.includes(`"${m[1]}"`) && in_variations.includes(`"${m[1]}"`)
-			);
+			// the id is in two of the contents rendered (the default and each variation)
+			const contents = [spec.content.data ?? {}, ...Object.values(spec.content.variations as object)].map((c) => JSON.stringify(c));
+			return [...failure.detail.matchAll(CLASS_ID_RE)].every((m) => contents.filter((c) => c.includes(`"${m[1]}"`)).length >= 2);
 		}
 	}
 ];
