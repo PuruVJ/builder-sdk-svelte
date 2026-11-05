@@ -1,5 +1,5 @@
 # A preview package for every push and pull request (https://pkg.pr.new): install a PR's build with
-#   npm i https://pkg.pr.new/PuruVJ/builder-sdk-svelte/@puruvj/builder-sdk-svelte@<commit or PR number>
+#   pnpm add https://pkg.pr.new/PuruVJ/builder-sdk-svelte/@puruvj/builder-sdk-svelte@<commit or PR number>
 # Needs the pkg.pr.new GitHub App installed on this repository.
 name: pkg.pr.new
 
@@ -16,13 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # (pnpm version from package.json `packageManager`)
       - uses: pnpm/action-setup@v4
-        with:
-          version: 12
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm dlx pkg-pr-new publish --pnpm
+      - run: pnpm dlx pkg-pr-new publish --pnpm --packageManager=pnpm
