@@ -208,6 +208,9 @@ pages through both SDKs):
 
 - `Builder:RawText` is registered as a built-in. The official Svelte SDK ships the block but does not
   register it, so there it renders as an unknown component.
+- A `</style` inside a style value (or `cssCode`) is written `<\/style`, the same CSS, so it cannot
+  close the style tag. The official SDK lets it close the tag, and the rest of the value becomes
+  markup on the page.
 - Whitespace-only text between blocks is not byte-identical. It only shows where the browser repairs
   invalid HTML, such as a block with a link inside another linked block: the parser re-opens the outer
   link around each text node, so the repaired trees differ. The markup as written is the same.

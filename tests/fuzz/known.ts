@@ -24,6 +24,18 @@ function each_block(v: unknown, fn: (b: Record<string, any>) => void): void {
 	}
 }
 
+/** Every string in `v`, rewritten by `fn` (in place). */
+function each_string(v: unknown, fn: (s: string) => string): void {
+	if (!v || typeof v !== 'object') return;
+	const o = v as Record<string, unknown>;
+	for (const k in o) {
+		if (typeof o[k] === 'string') o[k] = fn(o[k] as string);
+		else each_string(o[k], fn);
+	}
+}
+
+const CLOSE_STYLE_RE = /<\/style/gi;
+
 /**
  * Rewrites for known differences, applied before every check:
  *
@@ -31,13 +43,20 @@ function each_block(v: unknown, fn: (b: Record<string, any>) => void): void {
  *    Svelte SDK ships the block but does not register it, so it renders as an unknown component
  *    (its wrapper and children). There is no official output to compare our RawText against:
  *    renamed to an unregistered name, it renders the same in both.
+ *  - `</style` in a style value: ours writes it `<\/style` (internal/tags.ts) so it cannot close
+ *    the style tag; the official SDK lets it, and the rest becomes markup. Written `<\/style` in
+ *    the content itself, both render the same (tests/fuzz-regressions.test.ts checks ours escapes).
  */
 export function neutralize(spec: Spec): Spec {
 	const json = JSON.stringify(spec);
-	if (!json.includes('"Builder:RawText"')) return spec;
+	const raw_text = json.includes('"Builder:RawText"');
+	const close_style = /<\/style/i.test(json);
+	if (!raw_text && !close_style) return spec;
 	const out = JSON.parse(json) as Spec;
+	const escape = (s: string) => s.replace(CLOSE_STYLE_RE, '<\\/style');
 	each_block(out, (b) => {
 		if (b.component?.name === 'Builder:RawText') b.component.name = 'Unregistered RawText';
+		if (close_style) for (const key of ['style', 'responsiveStyles', 'animations']) each_string(b[key], escape);
 	});
 	return out;
 }

@@ -6,9 +6,10 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { check } from './fuzz/check.js';
+import { normalize } from './normalize.js';
 import type { Spec } from './fuzz/gen.js';
 // @ts-ignore built by `pnpm bench:build`
-import { set_echo } from '../bench/dist/entry.js';
+import { render_content, set_echo } from '../bench/dist/entry.js';
 
 const E = '@builder.io/sdk:Element';
 const LOC = '@builder.io/core:LocalizedValue';
@@ -137,4 +138,25 @@ describe('fuzz regressions: minimal shapes that once diverged', () => {
 			expect(r.official_error).toBeUndefined();
 			expect(r.failure).toBeNull();
 		});
+});
+
+describe('a style value cannot close its style tag (the official SDK lets it inject markup)', () => {
+	it('</style> in responsive, inline-sheet and own-tag styles stays CSS', () => {
+		const html = render_content('ours', {
+			content: {
+				id: 'c',
+				data: {
+					blocks: [
+						{ '@type': E, id: 'builder-a', responsiveStyles: { large: { color: '</style><b id="injected">x</b>' } } },
+						{ '@type': E, id: 'builder-b', bindings: { 'style.color': '"red"' }, responsiveStyles: { small: { color: '</STYLE><i id="injected2">' } } }
+					]
+				}
+			},
+			model: 'page',
+			apiKey: 'k',
+			canTrack: false
+		}).body;
+		expect(html).not.toMatch(/<\/style><[bi] id="injected/i);
+		expect(normalize(html).tree).not.toContain('injected');
+	});
 });
