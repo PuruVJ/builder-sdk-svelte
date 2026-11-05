@@ -24,6 +24,9 @@ const deep_paths = (): string[] =>
 		.filter((rel) => fs.existsSync(path.join(OFFICIAL_SRC, rel + '.ts')))
 		.sort();
 
+/** The official package's entry points (`exports`), and the bare runtime names some apps use. */
+const ENTRY_POINTS = ['bundle/browser', 'bundle/node', 'bundle/edge', 'browser', 'node', 'edge'];
+
 const CONSUMER_TS = (paths: string[]) => `
 ${paths.map((p, i) => `import type * as deep_${i} from '@builder.io/sdk-svelte/src/${p}';`).join('\n')}
 import type { BuilderBlock as DeepBlock, BuilderAnimation } from '@builder.io/sdk-svelte/src/types/builder-block';
@@ -48,6 +51,10 @@ import {
 	type RegisteredComponent
 } from '@builder.io/sdk-svelte';
 import type { ComponentProps } from 'svelte';
+${ENTRY_POINTS.map((e, i) => `import { Content as Content_${i}, type BuilderContent as Content_type_${i} } from '@builder.io/sdk-svelte/${e}';`).join('\n')}
+
+// the official entry points are the root: the same components, the same types
+${ENTRY_POINTS.map((_, i) => `export const _entry_${i}: [typeof Content, (c: Content_type_${i}) => BuilderContent, (c: BuilderContent) => Content_type_${i}] = [Content_${i}, (c) => c, (c) => c];`).join('\n')}
 
 export type _deep = [${paths.map((_, i) => `typeof deep_${i}`).join(', ')}];
 
@@ -131,6 +138,15 @@ function check(resolution: 'bundler' | 'node10'): string {
 describe.skipIf(!built)('an app on the official type paths', () => {
 	it('every official type module the package ships is vendored', () => {
 		expect(deep_paths().length).toBeGreaterThanOrEqual(30);
+	});
+	it('the official entry points resolve to the root build at runtime', () => {
+		const dir = path.join(ROOT, '.check-types/bundler');
+		if (!fs.existsSync(dir)) check('bundler');
+		const resolve = (spec: string) =>
+			execFileSync(process.execPath, ['--input-type=module', '-e', `console.log(import.meta.resolve(${JSON.stringify(spec)}))`], { cwd: dir, encoding: 'utf8' }).trim();
+		const root = resolve('@builder.io/sdk-svelte');
+		expect(root).toMatch(/\/dist\/index\.js$/);
+		for (const e of ENTRY_POINTS) expect(resolve(`@builder.io/sdk-svelte/${e}`), e).toBe(root);
 	});
 	for (const resolution of ['bundler', 'node10'] as const) {
 		it(`type-checks with moduleResolution ${resolution}`, () => {

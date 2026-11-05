@@ -24,11 +24,53 @@
 		"*": {
 			"src/*": [
 				"dist/official/*"
+			],
+			"bundle/*": [
+				"dist/index.d.ts"
+			],
+			"browser": [
+				"dist/index.d.ts"
+			],
+			"node": [
+				"dist/index.d.ts"
+			],
+			"edge": [
+				"dist/index.d.ts"
 			]
 		}
 	},
 	"exports": {
 		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./bundle/browser": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./bundle/node": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./bundle/edge": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./browser": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./node": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./edge": {
 			"types": "./dist/index.d.ts",
 			"svelte": "./dist/index.js",
 			"default": "./dist/index.js"
