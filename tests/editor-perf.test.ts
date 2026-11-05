@@ -11,7 +11,7 @@ import path from 'node:path';
 import { perf_content } from '../e2e/app/src/routes/editor-perf/content.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const SDKS = { official: 4441, ours: 4442 } as const;
+const SDKS = { official: 4471, ours: 4472 } as const;
 const built = Object.keys(SDKS).every((sdk) => fs.existsSync(path.join(ROOT, `e2e/app/build-${sdk}`)));
 const SECTIONS = 100; // 100 sections × 3 Cards = 300 custom components
 

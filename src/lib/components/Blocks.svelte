@@ -5,6 +5,7 @@
 	 * `<Content>` / repeat item, or of the `context` store it is handed.
 	 */
 	import { getContext } from 'svelte';
+	import { is_editing } from '../internal/env.js';
 	import type { BuilderBlock, RegisteredComponent, RegisteredComponents } from '../types.js';
 	import { kebab } from '../internal/css.js';
 	import { SCOPE_KEY } from '../internal/keys.js';
@@ -73,6 +74,20 @@
 		return 'component.options.' + path;
 	}
 
+	/**
+	 * official blocks-wrapper `onClick` / `onMouseEnter`: in the editor, an empty list is where
+	 * "+ Add Block" goes — the editor draws the button, the click on the list tells it where.
+	 */
+	function empty_blocks(type: string) {
+		if (is_editing() && !blocks?.length) window.parent?.postMessage({ type, data: { parentElementId: parent, dataPath: data_path() } }, '*');
+	}
+	const click_empty = () => empty_blocks('builder.clickEmptyBlocks');
+	const hover_empty = () => empty_blocks('builder.hoverEmptyBlocks');
+	// (only once live, inside the editor: a visitor's lists carry no handlers)
+	const editor_handlers = $derived(
+		scope?.ctx.plan.live && is_editing() ? { onclick: click_empty, onkeypress: click_empty, onmouseenter: hover_empty } : {}
+	);
+
 	function style_of(obj: Record<string, unknown> | undefined): string {
 		let out = '';
 		if (obj) for (const key in obj) out += kebab(key) + ':' + obj[key] + ';';
@@ -130,13 +145,14 @@
 		class={wrapper_class}
 		builder-path={data_path()}
 		builder-parent-id={parent}
+		{...editor_handlers}
 		{...wrapper_props}
 		>{@render contents()}</svelte:element
 	>
 {/snippet}
 <!-- <svelte:element> re-inserts its element on hydration, disconnecting every custom element in it: the default div is a plain element, between empty renders so the server shape stays the same -->
 {#snippet div_tree()}
-	{@render nothing()}<div style={style_of(styleProp)} class={wrapper_class} builder-path={data_path()} builder-parent-id={parent} {...wrapper_props}>{@render contents()}</div>{@render nothing()}
+	{@render nothing()}<div style={style_of(styleProp)} class={wrapper_class} builder-path={data_path()} builder-parent-id={parent} {...editor_handlers} {...wrapper_props}>{@render contents()}</div>{@render nothing()}
 {/snippet}
 <!-- the same without re-inserting the wrapper: the server's wrapper sits between two empty comments, as {@html} hydrates -->
 {#snippet adopted()}
