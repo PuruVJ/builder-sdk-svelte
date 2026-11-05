@@ -16,6 +16,11 @@ import Leaf from './app/Leaf.svelte';
 import NoWrap from './app/NoWrap.svelte';
 import ChildrenOption from './app/ChildrenOption.svelte';
 import ContextReader from './app/ContextReader.svelte';
+import NoWrapStub from './stubs/unit/NoWrapStub.svelte';
+import LinkStub from './stubs/unit/LinkStub.svelte';
+import PropsEcho from './stubs/unit/PropsEcho.svelte';
+import Fallback from './stubs/unit/Fallback.svelte';
+import ProbeOfficial from './stubs/unit/ProbeOfficial.svelte';
 
 /** `official` = the pinned 5.2.0 baseline; `latest` = the newest official release. */
 export type Sdk = 'official' | 'latest' | 'ours';
@@ -130,4 +135,14 @@ export function set_plain(on: boolean): void {
 
 export function set_echo(on: boolean): void {
 	(globalThis as { __stub_echo?: boolean }).__stub_echo = on;
+}
+
+// ── UNIT TESTS (tests/unit/components): the official side, compiled with the official SDK ─────────
+/** The test components, as the official side registers them (ours imports the same files from source). */
+export const official_test_components = { Stub: StubOfficial, NoWrapStub, LinkStub, PropsEcho, Fallback, Probe: ProbeOfficial };
+
+/** A <Blocks> rendered on its own (no <Content> above it). */
+export function render_blocks(sdk: Sdk, props: Record<string, unknown>): { head: string; body: string } {
+	const out = render(BLOCKS[sdk] as never, { props: props as never });
+	return { head: out.head, body: out.body };
 }
