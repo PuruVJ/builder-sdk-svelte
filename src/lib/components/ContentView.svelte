@@ -48,7 +48,8 @@
 		isNestedRender = false,
 		showContent = true,
 		isSsrAbTest = false,
-		live = false
+		live = false,
+		trackImpression = true
 	}: {
 		content?: BuilderContent | null;
 		model?: string;
@@ -72,6 +73,8 @@
 		showContent?: boolean;
 		isSsrAbTest?: boolean;
 		live?: boolean;
+		/** false: this view replaces one whose impression was already sent (Content.svelte, A/B) */
+		trackImpression?: boolean;
 	} = $props();
 
 	// The render version: bumped when root state changes (an action, an HTTP request) so the blocks
@@ -194,7 +197,7 @@
 		if (!live && is_authoring()) return;
 		const teardown = live ? start_live() : undefined;
 		const c = ctx.content;
-		if (c && (canTrack ?? true) && apiKey) {
+		if (c && trackImpression && (canTrack ?? true) && apiKey) {
 			const winning = get_cookie(`builder.tests.${c.id}`, true);
 			if (c.testVariationId === winning) {
 				void track({

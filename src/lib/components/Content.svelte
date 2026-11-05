@@ -97,7 +97,13 @@
 
 	let view: { update_content(next: BuilderContent | null | undefined): void } | undefined = $state.raw();
 
+	// After the server's variants go, a winning variation re-keys the view: its impression was already
+	// sent by that variation's own (hidden, hydrated) view — official ContentVariants tracks it there
+	// once and never remounts. The new view must not send it again.
+	let impression_sent = $state(false);
+
 	onMount(() => {
+		if (render_variants) impression_sent = true;
 		render_variants = false;
 		if (!live && is_authoring()) live = true;
 	});
@@ -128,6 +134,6 @@
 	{/each}
 {/if}
 {#key content_key}
-	<ContentView bind:this={view} {...view_props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} />
+	<ContentView bind:this={view} {...view_props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} trackImpression={!impression_sent} />
 {/key}
 {#if live}{#key props.content}<Run run={() => view?.update_content(default_content)} />{/key}{/if}
