@@ -35,6 +35,7 @@ function each_string(v: unknown, fn: (s: string) => string): void {
 }
 
 const CLOSE_STYLE_RE = /<\/style/gi;
+const SCRIPT_BREAK_RE = /<(\/?script|!--)/gi;
 
 /**
  * Rewrites for known differences, applied before every check:
@@ -46,17 +47,27 @@ const CLOSE_STYLE_RE = /<\/style/gi;
  *  - `</style` in a style value: ours writes it `<\/style` (internal/tags.ts) so it cannot close
  *    the style tag; the official SDK lets it, and the rest becomes markup. Written `<\/style` in
  *    the content itself, both render the same (tests/fuzz-regressions.test.ts checks ours escapes).
+ *  - `</script` / `<!--` in a PersonalizationContainer's variants: both SDKs inline the variants'
+ *    JSON in a script; ours writes those `<\/script` / `<\!--` (internal/tags.ts `script_safe`, the
+ *    same JS string) so content cannot end the script; the official lets it, and the rest of the
+ *    JSON becomes markup. The same text is also the variant's HTML (a Custom Code block), so it is
+ *    neutralized as text: `<script`, `</script`, `<!--` written `&lt;…` in the variants' strings
+ *    (tests/unit/personalization.test.ts checks ours escapes).
  */
 export function neutralize(spec: Spec): Spec {
 	const json = JSON.stringify(spec);
 	const raw_text = json.includes('"Builder:RawText"');
 	const close_style = /<\/style/i.test(json);
-	if (!raw_text && !close_style) return spec;
+	const script_break = json.includes('"PersonalizationContainer"') && SCRIPT_BREAK_RE.test(json);
+	SCRIPT_BREAK_RE.lastIndex = 0;
+	if (!raw_text && !close_style && !script_break) return spec;
 	const out = JSON.parse(json) as Spec;
 	const escape = (s: string) => s.replace(CLOSE_STYLE_RE, '<\\/style');
+	const escape_script = (s: string) => s.replace(SCRIPT_BREAK_RE, '&lt;$1');
 	each_block(out, (b) => {
 		if (b.component?.name === 'Builder:RawText') b.component.name = 'Unregistered RawText';
 		if (close_style) for (const key of ['style', 'responsiveStyles', 'animations']) each_string(b[key], escape);
+		if (script_break && b.component?.name === 'PersonalizationContainer') each_string(b.component.options?.variants, escape_script);
 	});
 	return out;
 }

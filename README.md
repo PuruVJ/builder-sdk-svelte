@@ -226,6 +226,10 @@ pages through both SDKs):
 - A `</style` inside a style value (or `cssCode`) is written `<\/style`, the same CSS, so it cannot
   close the style tag. The official SDK lets it close the tag, and the rest of the value becomes
   markup on the page.
+- The personalization and A/B inline scripts carry content as JSON. A `</script` or `<!--` in it (a
+  Custom Code block with a script, inside a personalization variant) is written `<\/script` /
+  `<\!--`, the same JS string, and ids are JSON-quoted (the same bytes for any plain id). The
+  official SDK lets the content end the script, and the rest of the JSON shows on the page as text.
 - Whitespace-only text between blocks is not byte-identical. It only shows where the browser repairs
   invalid HTML, such as a block with a link inside another linked block: the parser re-opens the outer
   link around each text node, so the repaired trees differ. The markup as written is the same.
