@@ -28,7 +28,8 @@ const write = (name, obj) => {
 	fs.writeFileSync(file, JSON.stringify(obj));
 	return fs.statSync(file).size;
 };
-const content = (blocks, extra = {}) => ({ id: 'content-' + id(), name: 'gen', data: { blocks, ...extra.data }, ...extra, data_: undefined });
+// (`extra.data` merges into data — spread `extra` first, or its `data` would replace the blocks)
+const content = (blocks, extra = {}) => ({ id: 'content-' + id(), name: 'gen', ...extra, data: { blocks, ...extra.data } });
 
 /** Re-id every element in a deep copy (so repeated real blocks stay unique ids, like real content). */
 function reid(v) {
