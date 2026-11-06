@@ -1,0 +1,77 @@
+{
+	"$schema": "https://turborepo.com/schema.json",
+	"ui": "stream",
+	"globalDependencies": ["tsconfig.json"],
+	"tasks": {
+		"//#build": {
+			"inputs": ["src/lib/**", "tsdown.config.ts", "scripts/check-dist-*.mjs", "package.json"],
+			"outputs": ["dist/**"]
+		},
+		"//#fixtures": {
+			"cache": false
+		},
+		"//#bench:build": {
+			"inputs": ["src/lib/**", "bench/**", "!bench/dist/**", "!bench/results/**", "!bench/prof/**"],
+			"outputs": ["bench/dist/**"]
+		},
+
+		"@sdk/tests#build": {
+			"outputs": ["dist/**"]
+		},
+		"@e2e/sveltekit#build:official": {
+			"dependsOn": ["@sdk/tests#build"],
+			"outputs": ["build-official/**", ".svelte-kit-official/**"]
+		},
+		"@e2e/sveltekit#build:latest": {
+			"dependsOn": ["@sdk/tests#build"],
+			"outputs": ["build-latest/**", ".svelte-kit-latest/**"]
+		},
+		"@e2e/sveltekit#build:ours": {
+			"dependsOn": ["@sdk/tests#build", "//#build"],
+			"outputs": ["build-ours/**", ".svelte-kit-ours/**"]
+		},
+		"@e2e/sveltekit#build:official:async": {
+			"dependsOn": ["@sdk/tests#build"],
+			"outputs": ["build-official-async/**", ".svelte-kit-official-async/**"]
+		},
+		"@e2e/sveltekit#build:ours:async": {
+			"dependsOn": ["@sdk/tests#build", "//#build"],
+			"outputs": ["build-ours-async/**", ".svelte-kit-ours-async/**"]
+		},
+
+		"//#test:unit": {
+			"dependsOn": ["//#fixtures", "//#bench:build"],
+			"inputs": ["src/lib/**", "tests/**", "bench/**", "!bench/dist/**", "!bench/results/**", "vitest.config.ts", "scripts/gen-fixtures.mjs", "fixtures/real/**"],
+			"env": ["FUZZ_SEEDS", "FUZZ_SEED", "LIVE_SEEDS"]
+		},
+		"//#test:run": {
+			"dependsOn": [
+				"//#fixtures",
+				"//#bench:build",
+				"//#build",
+				"@e2e/sveltekit#build:official",
+				"@e2e/sveltekit#build:latest",
+				"@e2e/sveltekit#build:ours"
+			],
+			"inputs": ["src/lib/**", "tests/**", "bench/**", "!bench/dist/**", "!bench/results/**", "vitest.config.ts", "scripts/**", "fixtures/real/**"],
+			"env": ["FUZZ_SEEDS", "FUZZ_SEED", "LIVE_SEEDS", "EDITOR_FUZZ_*"]
+		},
+		"//#test:ci": {
+			"dependsOn": [
+				"//#fixtures",
+				"//#bench:build",
+				"//#build",
+				"@e2e/sveltekit#build:official",
+				"@e2e/sveltekit#build:latest",
+				"@e2e/sveltekit#build:ours"
+			],
+			"inputs": ["src/lib/**", "tests/**", "bench/**", "!bench/dist/**", "!bench/results/**", "vitest.config.ts", "scripts/**", "fixtures/real/**"],
+			"env": ["FUZZ_SEEDS", "FUZZ_SEED", "LIVE_SEEDS"]
+		},
+		"//#test:editor-fuzz": {
+			"dependsOn": ["//#build", "@e2e/sveltekit#build:official", "@e2e/sveltekit#build:ours"],
+			"inputs": ["tests/editor-fuzz*.ts"],
+			"env": ["EDITOR_FUZZ_*"]
+		}
+	}
+}

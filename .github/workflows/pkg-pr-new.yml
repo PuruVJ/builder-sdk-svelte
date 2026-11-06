@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# (the build comes from Turborepo's remote cache when the test workflow already built this commit)
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -22,6 +27,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # Turborepo's local cache, kept between runs by GitHub's cache (plus the remote cache)
+      - uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.job }}-
+            turbo-${{ runner.os }}-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - run: pnpm turbo run build
       - run: pnpm dlx pkg-pr-new publish --pnpm --packageManager=pnpm
