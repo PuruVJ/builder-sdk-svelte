@@ -55,13 +55,17 @@ jobs:
           commit-message: Version Packages
 
       # No pending changesets (the version pull request was just merged): publish the version in
-      # package.json if npm does not have it yet, then tag it.
+      # package.json if it was not released yet, then tag it. "Released" is the git tag (pushed right
+      # after the publish) or npm having it: a version npm is still processing, or one waiting in
+      # npm's staging for a maintainer's approval, does not show on npm yet.
       - id: unpublished
         if: steps.changesets.outputs.has-changesets == 'false'
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
-          if npm view "$name@$version" version >/dev/null 2>&1; then
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "v$version is already tagged (published, or staged on npm for approval)"
+          elif npm view "$name@$version" version >/dev/null 2>&1; then
             echo "$name@$version is already on npm"
           else
             echo "version=$version" >> "$GITHUB_OUTPUT"
