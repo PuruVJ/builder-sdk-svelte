@@ -1,0 +1,30 @@
+# Keeps the release tooling current: the Changesets packages and the GitHub Actions the workflows use
+# (changesets/action, pnpm/action-setup, actions/setup-node, …). One grouped pull request per
+# ecosystem per week; CI runs on each.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # only the Changesets packages: the rest of the dependencies (svelte, the official SDK the parity
+    # tests run against, build tools) are bumped on purpose, by hand
+    allow:
+      - dependency-name: '@changesets/*'
+    groups:
+      changesets:
+        patterns: ['@changesets/*']
+        update-types: [major, minor, patch]
+    commit-message:
+      prefix: 'Release tooling'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: [major, minor, patch]
+    commit-message:
+      prefix: 'CI'
