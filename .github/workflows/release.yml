@@ -32,19 +32,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Pending changesets: open / update the "Version Packages" pull request (no publishing here).
+      # (v2: built on Changesets v3, which keeps consumed pre-release changesets in .changeset/pre/
+      # — v1 read that folder as a Changesets v1 changeset and failed)
       - id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: pnpm changeset:version
-          title: Version Packages
-          commit: Version Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm changeset:version
+          pr-title: Version Packages
+          commit-message: Version Packages
 
       # No pending changesets (the version pull request was just merged): publish the version in
       # package.json if npm does not have it yet, then tag it.
       - id: unpublished
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.changesets.outputs.has-changesets == 'false'
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
