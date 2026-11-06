@@ -1,5 +1,7 @@
 /**
- * The built-in blocks with the official flags (name, noWrap, which builder props each receives).
+ * The built-in blocks, in the official order (`getDefaultRegisteredComponents()`,
+ * constants/builder-registered-components.ts + extra-components.ts, TARGET 'svelte'), each with the
+ * official info (component-info.ts): what the editor is sent in `builder.registerComponent`.
  *
  * Built LAZILY, on the first registry build: importing the package runs nothing (the package is
  * `sideEffects`-free), and the block components — some of which import back into the renderer
@@ -8,6 +10,8 @@
 import type { RegisteredComponent } from '../types.js';
 import type { Compiled } from './compile.js';
 import { PLAIN_RENDER } from './plain.js';
+import * as info from './component-info.js';
+import { NOT_IN_EDITOR } from './editor.js';
 import Button from '../blocks/Button.svelte';
 import Columns from '../blocks/Columns.svelte';
 import CustomCode from '../blocks/CustomCode.svelte';
@@ -39,34 +43,28 @@ let list: RegisteredComponent[] | null = null;
 
 export function default_components(): RegisteredComponent[] {
 	if (list) return list;
-	const ALL = { builderBlock: true, builderContext: true, builderComponents: true, builderLinkComponent: true };
 	return (list = [
-		{ component: Button, name: 'Core:Button', noWrap: true, static: true, shouldReceiveBuilderProps: { builderLinkComponent: true } },
-		{ component: Columns, name: 'Columns', isRSC: true, shouldReceiveBuilderProps: ALL },
-		{ component: Fragment, name: 'Fragment', static: true, canHaveChildren: true, noWrap: true },
-		{ component: Image, name: 'Image', static: true, canHaveChildren: true, shouldReceiveBuilderProps: { builderBlock: true } },
-		{ component: Section, name: 'Core:Section', static: true, canHaveChildren: true },
-		{ component: Slot, name: 'Slot', isRSC: true, shouldReceiveBuilderProps: { builderContext: true, builderComponents: true } },
-		{ component: Symbol, name: 'Symbol', noWrap: true, static: true, isRSC: true, shouldReceiveBuilderProps: ALL },
-		{ component: Text, name: 'Text', static: true, shouldReceiveBuilderProps: {}, [PLAIN_RENDER]: text_html },
-		{ component: CustomCode, name: 'Custom Code', static: true },
-		{ component: Embed, name: 'Embed', static: true },
-		{ component: Img, name: 'Raw:Img', noWrap: true },
-		{ component: RawText, name: 'Builder:RawText' },
-		{ component: Tabs, name: 'Builder: Tabs', shouldReceiveBuilderProps: ALL },
-		{ component: Accordion, name: 'Builder:Accordion', canHaveChildren: true, shouldReceiveBuilderProps: ALL },
-		{ component: Form, name: 'Form:Form', noWrap: true, canHaveChildren: true, shouldReceiveBuilderProps: ALL },
-		{ component: FormInput, name: 'Form:Input', noWrap: true, static: true },
-		{ component: FormSubmitButton, name: 'Form:SubmitButton', noWrap: true, static: true },
-		{ component: FormSelect, name: 'Form:Select', noWrap: true, static: true },
-		{ component: FormTextarea, name: 'Form:TextArea', noWrap: true, static: true },
-		{ component: Video, name: 'Video', canHaveChildren: true, shouldReceiveBuilderProps: { builderBlock: true } },
-		{
-			component: PersonalizationContainer,
-			name: 'PersonalizationContainer',
-			noWrap: true,
-			canHaveChildren: true,
-			shouldReceiveBuilderProps: { builderBlock: true, builderContext: true, builderComponents: true }
-		}
+		{ component: Button, ...info.button_info() },
+		{ component: Columns, ...info.columns_info() },
+		{ component: Fragment, ...info.fragment_info() },
+		{ component: Image, ...info.image_info() },
+		{ component: Section, ...info.section_info() },
+		{ component: Slot, ...info.slot_info() },
+		{ component: Symbol, ...info.symbol_info() },
+		{ component: Text, ...info.text_info(), [PLAIN_RENDER]: text_html },
+		{ component: PersonalizationContainer, ...info.personalization_container_info() },
+		{ component: Tabs, ...info.tabs_info() },
+		{ component: Accordion, ...info.accordion_info() },
+		{ component: CustomCode, ...info.custom_code_info() },
+		{ component: Embed, ...info.embed_info() },
+		{ component: Form, ...info.form_info() },
+		{ component: FormInput, ...info.form_input_info() },
+		{ component: FormSubmitButton, ...info.form_submit_button_info() },
+		{ component: FormSelect, ...info.form_select_info() },
+		{ component: FormTextarea, ...info.form_textarea_info() },
+		{ component: Img, ...info.img_info() },
+		{ component: Video, ...info.video_info() },
+		// NOT in the official list, so never sent to the editor; ours renders it anyway.
+		{ component: RawText, ...info.raw_text_info(), [NOT_IN_EDITOR]: true }
 	] as RegisteredComponent[]);
 }

@@ -1,0 +1,21 @@
+// Vendored from @builder.io/sdk-svelte@5.2.0 src/blocks/symbol/symbol.types.ts (MIT) by scripts/vendor-official-types.mjs — do not edit.
+import type { BuilderContent } from '../../types/builder-content.js';
+import type { BuilderComponentsProp, BuilderDataProps, BuilderLinkComponentProp } from '../../types/builder-props.js';
+export interface SymbolInfo {
+  model?: string;
+  entry?: string;
+  data?: any;
+  content?: BuilderContent;
+  inline?: boolean;
+  dynamic?: boolean;
+  ownerId?: string;
+  global?: boolean;
+}
+export interface SymbolProps extends BuilderComponentsProp, BuilderDataProps, BuilderLinkComponentProp {
+  symbol?: SymbolInfo;
+  dataOnly?: boolean;
+  dynamic?: boolean;
+  attributes?: any;
+  inheritState?: boolean;
+  renderToLiquid?: boolean;
+}

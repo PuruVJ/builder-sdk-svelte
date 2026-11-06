@@ -21,7 +21,7 @@
 	import type { BuilderBlock } from '../types.js';
 	import type { Compiled } from '../internal/compile.js';
 	import type { Scope } from '../internal/scope.js';
-	import { component_props, wrapper_attrs } from '../internal/render.js';
+	import { component_props, process, wrapper_attrs } from '../internal/render.js';
 	import { provide_scope } from '../internal/context.js';
 	import { plain_html } from '../internal/plain.js';
 	import { block_style } from '../internal/tags.js';
@@ -29,6 +29,7 @@
 	import Bound from './Bound.svelte';
 	import Repeat from './Repeat.svelte';
 	import Awaiter from './Awaiter.svelte';
+	import Retry from './Retry.svelte';
 
 	export { view };
 
@@ -40,11 +41,23 @@
 	/** The shape a block renders as (its compiled record final: static, or a bound block's copy). */
 	function shape_of(c: Compiled, scope: Scope) {
 		if (!c.visible) return null;
+		// Live (the editor): a component that throws takes down only its own block, not the page.
+		if (scope.ctx.plan.live && c.comp?.component) {
+			if (c.no_wrap) return guarded_s;
+			if (c.is_link && scope.ctx.link_component) return link_guarded_s;
+			if (c.empty_tag) return empty_s;
+			if (c.tag === 'div') return div_guarded_s;
+			return element_guarded_s;
+		}
 		if (c.no_wrap) return c.comp?.component ? component_s : null;
 		if (c.is_link && scope.ctx.link_component) return link_s;
 		if (c.empty_tag) return empty_s;
 		if (c.tag === 'div') return c.comp?.component ? div_comp_s : div_kids_s;
 		return element_s;
+	}
+
+	function report(error: unknown) {
+		console.error('[Builder.io]: a component failed to render; its block is left empty until it changes:', error);
 	}
 
 	/** A static block: its whole subtree as one string when nothing in it has behaviour. */
@@ -59,8 +72,17 @@
 		return block_style(scope.ctx.nonce, c.css);
 	}
 
-	function entry_of(c: Compiled) {
+	function entry_of(c: Compiled, scope: Scope) {
+		// Live (the editor): a block keeps ONE structure whatever its bindings, so gaining or losing a
+		// binding never remounts what is inside it. Only a repeat (or animations, bound at mount) needs
+		// a <Block> of its own.
+		if (scope.ctx.plan.live) return c.repeat || c.src.animations?.length ? component_entry_s : live_entry_s;
 		return needs_component(c) ? component_entry_s : static_entry_s;
+	}
+
+	/** Live: the block with its bindings applied (again when root state changes). */
+	function live_of(c: Compiled, scope: Scope): Compiled {
+		return c.bindings ? (scope.ctx.version(), process(c, scope)) : c;
 	}
 </script>
 
@@ -78,15 +100,15 @@
 	// svelte-ignore state_referenced_locally
 	const scope = scope_prop;
 
-	// Read once: a block's content and scope do not change under a mounted block (a content change
-	// re-keys the whole <Content>). svelte-ignore: deliberate non-reactive reads.
-	// svelte-ignore state_referenced_locally
-	const compiled = scope.ctx.plan.compile(block);
+	// Static content never changes under a mounted block (a new content re-keys the whole <Content>),
+	// so this derives once. Live (the editor), a list keyed by id hands an edited block to the same
+	// instance: it re-derives — and an untouched block is the same object, a compile cache hit.
+	const compiled = $derived(scope.ctx.plan.compile(block));
 	// A repeat item is its own state layer: <Blocks> inside its components must see the item's scope
 	// (the official RepeatedBlock sets a new context per item).
 	// svelte-ignore state_referenced_locally
 	if (item) provide_scope(() => scope);
-	// Animations bind after mount — a lifecycle hook only for a block that has them.
+	// Animations bind after mount — a lifecycle hook only for a block that has them (as first rendered).
 	// svelte-ignore state_referenced_locally
 	if (compiled.src.animations?.length && compiled.id) {
 		const id = compiled.id;
@@ -94,7 +116,11 @@
 		onMount(() => bind_animations(list.map((a) => ({ ...a, elementId: id }))));
 	}
 
+	// (live: bindings applied in place — see entry_of)
+	const shown = $derived(bound ?? (scope.ctx.plan.live && !compiled.repeat ? live_of(compiled, scope) : compiled));
+
 	function pick(c: Compiled) {
+		if (!bound && scope.ctx.plan.live) return compiled.repeat ? repeat_s : shape_of(c, scope);
 		if (!bound) {
 			if (compiled.repeat) return repeat_s;
 			if (compiled.bindings) return bound_s;
@@ -104,23 +130,31 @@
 	}
 	/** The block's own style tag when its rules are not already in the content's one sheet. */
 	function own_css(c: Compiled): string {
+		if (!bound && scope.ctx.plan.live) return !compiled.repeat && c.visible && c.css ? block_style(scope.ctx.nonce, c.css) : '';
 		if (!bound && (compiled.repeat || compiled.bindings)) return '';
 		if (!bound) return static_css(c, scope);
 		return c.visible && c.css ? block_style(scope.ctx.nonce, c.css) : '';
 	}
 </script>
 
-{@html own_css(bound ?? compiled)}
-{@render pick(bound ?? compiled)?.(bound ?? compiled, scope)}
+{@html own_css(shown)}
+{@render pick(shown)?.(shown, scope)}
 
 <!-- A block in a list: static ones render right here, the rest as a <Block> instance. -->
 {#snippet view(block, scope)}
 	{@const c = scope.ctx.plan.compile(block)}
-	{@render entry_of(c)(c, scope)}
+	{@render entry_of(c, scope)(c, scope)}
 {/snippet}
 
 {#snippet component_entry_s(c, scope)}
 	<Block block={c.src} {scope} />
+{/snippet}
+
+<!-- live (entry_of): the same, with the block's bindings applied in place -->
+{#snippet live_entry_s(c, scope)}
+	{@const b = live_of(c, scope)}
+	{@html b.visible && b.css ? block_style(scope.ctx.nonce, b.css) : ''}
+	{@render shape_of(b, scope)?.(b, scope)}
 {/snippet}
 
 <!-- (the same output as a <Block>: its style tag, one space, its shape) -->
@@ -144,7 +178,7 @@
 {#snippet div_kids_s(c, scope)}
 	<!-- Also an entry registered WITHOUT a component (an app "removing" a built-in): the wrapper and
 	     the block's children, like the official SDK. -->
-	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (child)}{@render view(child, scope)}{/each}</div>
+	<div {...wrapper_attrs(c, scope, false)}>{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}</div>
 {/snippet}
 
 {#snippet div_comp_s(c, scope)}
@@ -168,8 +202,29 @@
 	{#if c.comp?.component}
 		{@render component_s(c, scope)}
 	{:else}
-		{#each c.children as child (child)}{@render view(child, scope)}{/each}
+		{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}
 	{/if}
+{/snippet}
+
+<!-- live only (shape_of): the same shapes, the component in a boundary -->
+{#snippet guarded_s(c, scope)}
+	<svelte:boundary onerror={report}>
+		{@render component_s(c, scope)}
+		{#snippet failed(_error, reset)}<Retry {c} {reset} />{/snippet}
+	</svelte:boundary>
+{/snippet}
+
+{#snippet div_guarded_s(c, scope)}
+	<div {...wrapper_attrs(c, scope, false)}>{@render guarded_s(c, scope)}</div>
+{/snippet}
+
+{#snippet element_guarded_s(c, scope)}
+	<svelte:element this={c.tag} {...wrapper_attrs(c, scope, false)}>{@render guarded_s(c, scope)}</svelte:element>
+{/snippet}
+
+{#snippet link_guarded_s(c, scope)}
+	{@const Tag = scope.ctx.link_component}
+	<Tag {...wrapper_attrs(c, scope, true)}>{@render guarded_s(c, scope)}</Tag>
 {/snippet}
 
 {#snippet component_s(c, scope)}
@@ -177,11 +232,11 @@
 	{@const Comp = c.comp.component}
 	{#if Comp.load}
 		<Awaiter load={Comp.load} fallback={Comp.fallback} props={component_props(c, scope)}>
-			{#each c.children as child (child)}{@render view(child, scope)}{/each}
+			{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}
 		</Awaiter>
 	{:else}
 		<Comp {...component_props(c, scope)}>
-			{#each c.children as child (child)}{@render view(child, scope)}{/each}
+			{#each c.children as child (scope.ctx.plan.key(c.children, child))}{@render view(child, scope)}{/each}
 		</Comp>
 	{/if}
 {/snippet}

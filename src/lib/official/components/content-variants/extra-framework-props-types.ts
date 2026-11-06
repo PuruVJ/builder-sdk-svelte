@@ -1,0 +1,2 @@
+// Vendored from @builder.io/sdk-svelte@5.2.0 src/components/content-variants/extra-framework-props-types.ts (MIT) by scripts/vendor-official-types.mjs — do not edit.
+export interface ExtraFrameworkProps {}

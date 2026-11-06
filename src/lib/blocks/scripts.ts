@@ -1,4 +1,9 @@
-/** Run the `<script>`s inside injected HTML (official CustomCode / Embed `runScripts`), once each. */
+/**
+ * Run the `<script>`s inside injected HTML (official CustomCode / Embed `runScripts`), once each.
+ * One rule for both: a script with no `type` is JavaScript (CustomCode's rule). The official Embed
+ * skips untyped inline scripts (its `isJsScript` wants an explicit type), which leaves an embed's
+ * plain `<script>` dead: not copied.
+ */
 const JS_TYPES = new Set(['text/javascript', 'application/javascript', 'application/ecmascript']);
 
 export function run_scripts(el: HTMLElement | undefined, inserted: string[], run: string[], label: string): void {

@@ -83,7 +83,7 @@ describe.skipIf(!built)('the editor sees the same app', () => {
 			infos.push(info);
 			await page.close();
 		}
-		expect(infos[1]).toEqual(infos[0]);
+		expect(normalize(infos[1])).toEqual(normalize(infos[0]));
 	});
 
 	it('inside the editor frame: the same messages, the same context, no errors', async () => {

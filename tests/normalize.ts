@@ -2,6 +2,9 @@
  * Normalise SSR output so the two SDKs can be compared for what the browser gets, not for how the
  * bytes are arranged:
  *  - hydration comments (`<!--[-->`, `<!---->`) and whitespace-only text are dropped;
+ *  - the text of a raw-text element (a block with `tagName: 'textarea'`) is markup the SDK rendered
+ *    into it: it is parsed and compared as markup (the parser would keep it, comments and all, as
+ *    one string);
  *  - `<style>` elements are pulled out: their CSS is compared separately as a SET of top-level
  *    rules (the official SDK emits one <style> per block, repeats included; ours one sheet);
  *  - `class`: token set, Svelte scope hashes (`svelte-xxxx`) dropped;
@@ -22,6 +25,7 @@ type Node = {
 
 const SVELTE_HASH_RE = /^svelte-[a-z0-9]+$/;
 const WS_RE = /\s+/g;
+const RAW_TEXT_TAGS = new Set(['textarea', 'title', 'xmp', 'noembed', 'noframes', 'iframe', 'noscript', 'plaintext']);
 const DECL_SPLIT_RE = /;\s*/;
 
 export interface Normalized {
@@ -41,6 +45,10 @@ function walk(node: Node, depth: number, out: string[], css: string[]): void {
 	for (const child of node.childNodes ?? []) {
 		if (child.nodeName === '#comment') continue;
 		if (child.nodeName === '#text') {
+			if (RAW_TEXT_TAGS.has(node.nodeName)) {
+				walk(parseFragment(child.value ?? '') as unknown as Node, depth, out, css);
+				continue;
+			}
 			const t = (child.value ?? '').replace(WS_RE, ' ').trim();
 			if (t) out.push('  '.repeat(depth) + '"' + t + '"');
 			continue;

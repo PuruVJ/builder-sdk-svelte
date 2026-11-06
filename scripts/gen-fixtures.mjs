@@ -28,7 +28,8 @@ const write = (name, obj) => {
 	fs.writeFileSync(file, JSON.stringify(obj));
 	return fs.statSync(file).size;
 };
-const content = (blocks, extra = {}) => ({ id: 'content-' + id(), name: 'gen', data: { blocks, ...extra.data }, ...extra, data_: undefined });
+// (`extra.data` merges into data — spread `extra` first, or its `data` would replace the blocks)
+const content = (blocks, extra = {}) => ({ id: 'content-' + id(), name: 'gen', ...extra, data: { blocks, ...extra.data } });
 
 /** Re-id every element in a deep copy (so repeated real blocks stay unique ids, like real content). */
 function reid(v) {
@@ -312,4 +313,85 @@ feat('builtins', [
 	{ '@type': E, id: id(), component: { name: 'Embed', options: { content: '<iframe src="about:blank"></iframe>' } } },
 	{ '@type': E, id: id(), component: { name: 'Raw:Img', options: { image: 'https://cdn.builder.io/x.png' } } }
 ]);
+// ── 4. fuzz regressions (tests/fuzz.test.ts found these; minimal shapes) ─────────────────────
+// A bound `tagName` does not change the tag (the official Block reads the block's own tagName).
+feat('fuzz-bound-tag', [
+	box([text('bound span')], { bindings: { tagName: '"span"' } }),
+	box([text('bound a')], { bindings: { tagName: '"a"', 'properties.title': '"t"' } }),
+	box([text('written span')], { tagName: 'span', bindings: { tagName: '"section"' } })
+]);
+// `data` only fills in what content.data lacks (EnableEditor re-merges the content over it), and it
+// wins in root state over what jsCode wrote.
+feat('fuzz-data-merge', [text('{{state.title}} / {{state.fromJs}}')], {
+	content: { data: { jsCode: 'state.title = "js:" + state.title; state.fromJs = "js";', cssCode: '.from-content { color: red; }' } },
+	props: { data: { title: 'from data', blocks: [text('data blocks never render')], cssCode: '.from-data { color: blue; }' } }
+});
+write('feat-fuzz-data-blocks.json', { content: { id: 'content-data-blocks', data: { state: { a: 1 } } }, data: { blocks: [text('from the data prop')] } });
+// A component whose options hold blocks receives them with their localized values resolved (the
+// official walk resolves the whole options tree in place, nested blocks included).
+{
+	const nested_loc = [
+		{ '@type': E, id: id(), component: { name: 'Gen - Card', options: { items: [{ '@type': E, id: id(), component: { name: 'Text', options: { text: loc('<p>Hi</p>', '<p>Salut</p>') } }, children: [text('kid', { component: { name: 'Text', options: { text: loc('<p>kid</p>', '<p>enfant</p>') } } })] }] } } },
+		{ '@type': E, id: id(), component: { name: 'Columns', options: { columns: [{ blocks: [{ '@type': E, id: id(), component: { name: 'Text', options: { text: loc('<p>col</p>', '<p>colonne</p>') } }, responsiveStyles: { large: { color: 'red' } } }] }] } } },
+		{ '@type': E, id: id(), component: { name: 'Gen - Card', options: { title: loc({ inner: loc('a', 'b') }, { inner: loc('c', 'd') }) } } }
+	];
+	feat('fuzz-nested-localized', nested_loc, { props: { locale: 'fr-FR' }, content: {} });
+}
+// Duplicate block ids (an id is a class name): the styles of a block that never renders must not
+// reach the block that does — not from the one sheet, and not across an inline symbol's content.
+{
+	const dup = (id, extra = {}) => ({ '@type': E, id, ...extra });
+	feat('fuzz-duplicate-ids', [
+		dup('builder-dup-a', { children: [text('rendered a')] }),
+		dup('builder-hidden', { hide: true, children: [dup('builder-dup-a', { responsiveStyles: { large: { color: 'red' } } })] }),
+		dup('builder-dup-b', { responsiveStyles: { large: { color: 'blue' } } }),
+		dup('builder-unknown', { component: { name: 'Gen - Unregistered', options: { items: [dup('builder-dup-b', { responsiveStyles: { large: { color: 'green' } } })] } } }),
+		dup('builder-dup-c', {
+			component: { name: 'Symbol', options: { symbol: { content: { id: 'sym-dup', data: { blocks: [dup('builder-x', { hide: true, children: [dup('builder-dup-c', { responsiveStyles: { large: { margin: '1px' } } })] })] } } } } }
+		}),
+		// (the same, in a symbol whose options hold a localized value: its content renders as a copy)
+		dup('builder-dup-d', {
+			component: {
+				name: 'Symbol',
+				options: {
+					symbol: {
+						content: {
+							id: 'sym-dup-loc',
+							data: { blocks: [dup('builder-y', { component: { name: 'Text', options: { text: loc('<p>a</p>', '<p>b</p>') } }, children: [dup('builder-dup-d', { component: { options: { title: loc('t', 'u') } }, responsiveStyles: { large: { margin: '2px' } } })] })] }
+						}
+					}
+				}
+			}
+		}),
+		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } }),
+		dup('builder-same', { responsiveStyles: { large: { color: 'pink' } } })
+	]);
+}
+// An inline symbol's blocks are styled with the SYMBOL's breakpoints (its own <Content>), never the
+// page's: the page's sheet must not carry rules for them with the page's media queries.
+feat('fuzz-symbol-breakpoints', [
+	text('page', { responsiveStyles: { medium: { color: 'red' }, small: { color: 'blue' } } }),
+	{
+		'@type': E,
+		id: id(),
+		component: {
+			name: 'Symbol',
+			options: {
+				symbol: {
+					content: {
+						id: 'sym-bp',
+						data: {
+							blocks: [
+								text('in symbol', { responsiveStyles: { medium: { color: 'green' }, small: { color: 'pink' } } }),
+								{ '@type': E, id: id(), component: { name: 'Slot', options: { name: 'slotA' } } }
+							]
+						}
+					},
+					// (a Slot in the symbol renders these, in the symbol's <Content>)
+					data: { slotA: [text('in slot', { responsiveStyles: { small: { color: 'navy' } } })] }
+				}
+			}
+		}
+	}
+], { content: { meta: { breakpoints: { small: 500, medium: 900 } } } });
 console.log('feature fixtures written');

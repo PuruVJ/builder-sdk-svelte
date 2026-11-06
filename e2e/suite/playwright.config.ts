@@ -116,8 +116,9 @@ export default defineConfig({
       const timeout = isReactNative ? 120 * 1000 : WEB_SERVER_TIMEOUT;
 
       return {
-        // (experiment) serve the SvelteKit e2e app built against BUILDER_SDK=official|ours
-        command: `PORT=${port} node ../app/build-${process.env.BUILDER_SDK === 'ours' ? 'ours' : 'official'}`,
+        // (experiment) serve the SvelteKit e2e app built against BUILDER_SDK=official|ours|latest,
+        // in Svelte's async mode with SVELTE_ASYNC=1 (e2e/app/svelte.config.js: build-<sdk>[-async])
+        command: `PORT=${port} node ../app/build-${['ours', 'latest'].includes(process.env.BUILDER_SDK ?? '') ? process.env.BUILDER_SDK : 'official'}${process.env.SVELTE_ASYNC === '1' ? '-async' : ''}`,
         port,
         reuseExistingServer: false,
         timeout,

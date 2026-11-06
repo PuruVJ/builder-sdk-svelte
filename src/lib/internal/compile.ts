@@ -16,9 +16,9 @@
  */
 import type { BuilderBlock, BuilderContent, RegisteredComponent } from '../types.js';
 import { max_width_query, sizes_for, type Sizes } from './breakpoints.js';
-import { css_class, kebab, style_attr } from './css.js';
+import { camel_to_kebab, css_class, style_attr } from './css.js';
 import { compile_code } from './evaluate.js';
-import { resolve_localized } from './localized.js';
+import { mark_option_owners, original_block, resolve_localized, source_block } from './localized.js';
 import { parse_path } from './paths.js';
 import { lookup, type Registry } from './registry.js';
 
@@ -66,7 +66,14 @@ export interface PlanOptions {
 	registry: Registry;
 	model: string;
 	locale: string | undefined;
-	breakpoints: { xsmall?: number; small?: number; medium?: number } | undefined;
+	breakpoints: { xsmall?: number; small?: number; medium?: number } | null | undefined;
+	/**
+	 * The editor / preview leg (internal/live.ts): the content changes under a mounted tree. The plan
+	 * outlives every edit (an untouched block stays a cache hit), so it keeps no page-wide shape: no
+	 * one sheet (each block carries its own style tag, which follows its edits), no plain-string
+	 * subtrees, and lists are keyed by block id so an edited block updates in place.
+	 */
+	live?: boolean;
 }
 
 export class Plan {
@@ -76,13 +83,14 @@ export class Plan {
 	readonly locale: string | undefined;
 	readonly sizes: Sizes;
 	readonly has_xsmall: boolean;
+	readonly live: boolean;
 	readonly compiled = new WeakMap<BuilderBlock, Compiled>();
 	/** Repeated blocks (the per-item copy without `repeat`) whose rules are in {@link sheet}; every
 	 *  other block carries that on its compiled record (`in_sheet`), no lookup needed. */
 	readonly repeat_in_sheet = new WeakSet<BuilderBlock>();
 	sheet = '';
 	/** What the content uses that needs page-level helper scripts (found by the same one walk). */
-	readonly flags = { personalization: false, ab: false };
+	readonly flags = { personalization: false, ab: false, symbols: false };
 
 	constructor(opts: PlanOptions) {
 		this.options = opts;
@@ -91,13 +99,46 @@ export class Plan {
 		this.locale = opts.locale;
 		this.sizes = sizes_for(opts.breakpoints ?? {});
 		this.has_xsmall = Boolean(opts.breakpoints?.xsmall);
+		this.live = opts.live === true;
+	}
+
+	#keys: WeakMap<object, Map<BuilderBlock, unknown>> | undefined;
+
+	/**
+	 * A block's key in a list's keyed each. Static: the block object itself. Live: its id (a list
+	 * re-sent by the editor is all new objects; the id is what stays), made unique within the list —
+	 * a duplicated or missing id must never collide (`#index`, `id~n`).
+	 */
+	key(list: readonly unknown[], block: BuilderBlock): unknown {
+		if (!this.live) return block;
+		const keys_by_list = (this.#keys ??= new WeakMap());
+		let keys = keys_by_list.get(list);
+		if (!keys) {
+			keys = new Map();
+			// (every key given out is used: a block whose id IS `a~1` never collides with a second `a`)
+			const used = new Set<string>();
+			for (let i = 0; i < list.length; i++) {
+				const b = list[i] as BuilderBlock;
+				if (keys.has(b)) continue;
+				const base = typeof b?.id === 'string' && b.id !== '' ? b.id : '#' + i;
+				let key = base;
+				for (let n = 1; used.has(key); n++) key = base + '~' + n;
+				used.add(key);
+				keys.set(b, key);
+			}
+			keys_by_list.set(list, keys);
+		}
+		return keys.get(block) ?? block;
 	}
 
 	/** The block's compiled record (cached for the life of the plan). */
 	compile(block: BuilderBlock): Compiled {
 		let c = this.compiled.get(block);
 		if (!c) {
-			c = compile_block(block, this, false);
+			// a nested block's resolved copy (localized.ts) renders as the block itself — when it was
+			// resolved for this plan's locale (a symbol's blocks come resolved for the parent's)
+			const original = original_block(block, this.locale ?? 'Default');
+			c = original ? this.compile(original) : compile_block(block, this, false, block.tagName);
 			this.compiled.set(block, c);
 		}
 		return c;
@@ -121,31 +162,105 @@ export class Plan {
 	 * compiles without the localized-value walk of its options.
 	 */
 	prepare(blocks: BuilderBlock[] | undefined): void {
-		if (!blocks) return;
+		if (!blocks || this.live) return;
 		const localized = new Set<BuilderBlock>();
 		const found = find_blocks(blocks, localized, this.flags, MAX_VISITS) ?? find_blocks_guarded(blocks, localized, this.flags);
 		const any_localized = localized.size > 0; // most content has none: no lookup per block
+		if (any_localized) mark_option_owners(blocks, localized, MAX_VISITS);
 		let sheet = '';
+		// A block's id is its class name, so a rule in the sheet styles every element with that id —
+		// also one rendered by ANOTHER block with the same id, when the block it was written for never
+		// renders. Duplicate ids are rare: they are found by a sort (no hashing per block), and only
+		// then is the sheet rebuilt without the ids whose blocks disagree on styles (see unsheet).
+		const ids: unknown[] = [];
+		const elsewhere = this.flags.symbols ? styled_elsewhere(found, this.sizes) : null;
 		for (let i = 0; i < found.length; i++) {
 			const block = found[i];
 			if (this.compiled.has(block)) continue; // the same object reached twice
-			const c = compile_block(block, this, !(any_localized && localized.has(block)));
+			const c = compile_block(block, this, !(any_localized && localized.has(block)), block.tagName);
 			this.compiled.set(block, c);
-			if (!c.bindings && c.css) {
+			if (c.id !== undefined) ids.push(c.id);
+			if (!c.bindings && c.css && !(any_no_sheet && NO_SHEET.has(source_block(block))) && !elsewhere?.has(block)) {
 				sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
 				c.in_sheet = true;
 				// The repeated block renders `c.repeat.block` per item: same styles, already in.
 				if (c.repeat) this.repeat_in_sheet.add(c.repeat.block);
 			}
 		}
-		this.sheet = sheet;
+		this.sheet = has_duplicates(ids) ? this.unsheet(found, sheet) : sheet;
 	}
 
-	/** Compile a block without caching (a bound block's per-render copy). */
-	compile_fresh(block: BuilderBlock): Compiled {
-		return compile_block(block, this, false);
+	/** `sheet` without the rules of blocks whose id another block shares with different styles: each
+	 *  of those renders its own style tag, as in the official SDK. */
+	private unsheet(found: BuilderBlock[], sheet: string): string {
+		const styles_by_id = new Map<unknown, string>();
+		const clashes = new Set<unknown>();
+		const blocks = new Set<Compiled>();
+		for (let i = 0; i < found.length; i++) {
+			const c = this.compiled.get(found[i])!;
+			if (c.id === undefined || blocks.has(c)) continue;
+			blocks.add(c);
+			const styles = c.bindings ? BOUND_STYLES : c.css;
+			const seen = styles_by_id.get(c.id);
+			if (seen === undefined) styles_by_id.set(c.id, styles);
+			else if (seen !== styles || styles === BOUND_STYLES) clashes.add(c.id);
+		}
+		if (!clashes.size) return sheet;
+		sheet = '';
+		for (const c of blocks) {
+			if (clashes.has(c.id)) {
+				// (also out of a nested content's sheet: an inline symbol's own plan, which may render a
+				// localized copy of the block)
+				NO_SHEET.add(source_block(c.src));
+				any_no_sheet = true;
+				if (!c.in_sheet) continue;
+				c.in_sheet = false;
+				if (c.repeat) this.repeat_in_sheet.delete(c.repeat.block);
+			} else if (c.in_sheet) sheet = sheet === '' ? c.css : sheet + ' ' + c.css;
+		}
+		return sheet;
+	}
+
+	/** Compile a block without caching (a bound block's per-render copy). Its tag is `tag_name`: the
+	 *  official Block reads the tag from the block as written, never from a bound `tagName`. */
+	compile_fresh(block: BuilderBlock, tag_name: string | undefined): Compiled {
+		return compile_block(block, this, false, tag_name);
 	}
 }
+
+/** Blocks whose id clashes with another block's (Plan.unsheet): never in any plan's sheet. */
+const NO_SHEET = new WeakSet<BuilderBlock>();
+let any_no_sheet = false;
+/**
+ * The blocks of inline symbols whose breakpoints differ from this content's. A symbol's blocks
+ * render in the symbol's own <Content>, styled by ITS sheet with ITS breakpoints: rules for them
+ * here would use the wrong media queries (and reach them, as they share the class names). That is
+ * its content's blocks and the blocks in its `data` (a Slot in the symbol renders those).
+ */
+function styled_elsewhere(found: BuilderBlock[], sizes: Sizes): Set<BuilderBlock> | null {
+	let out: Set<BuilderBlock> | null = null;
+	for (let i = 0; i < found.length; i++) {
+		const component = found[i].component;
+		if (component?.name !== 'Symbol') continue;
+		const symbol = component.options?.symbol as { content?: BuilderContent } | undefined;
+		const content = symbol?.content;
+		if (!content || sizes_for(content.meta?.breakpoints ?? {}) === sizes) continue; // (as Plan's)
+		const flags = { personalization: false, ab: false, symbols: false };
+		for (const block of find_blocks_guarded([symbol as BuilderBlock], new Set(), flags)) (out ??= new Set()).add(block);
+	}
+	return out;
+}
+
+/** Two equal values in `values` (sorted in place: comparing strings needs no hash per value). */
+function has_duplicates(values: unknown[]): boolean {
+	if (values.length < 2) return false;
+	values.sort();
+	for (let i = 1; i < values.length; i++) if (values[i] === values[i - 1]) return true;
+	return false;
+}
+
+/** What a bound block's styles count as when ids are compared: never equal (they depend on state). */
+const BOUND_STYLES = '\0bound';
 
 /** Objects one content walk may visit before it assumes a cycle (a 4 MB page has ~200 000). */
 const MAX_VISITS = 1 << 23;
@@ -239,11 +354,12 @@ function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: 
 		// visited after this block: children, then component options, then block options
 		if (block.options) {
 			values.push(block.options);
-			owners.push(null);
+			owners.push(owner);
 			listed.push(false);
 		}
 		if (component) {
 			if (component.name === 'PersonalizationContainer') flags.personalization = true;
+			else if (component.name === 'Symbol') flags.symbols = true;
 			if (component.options) {
 				values.push(component.options);
 				owners.push(block);
@@ -252,8 +368,20 @@ function find_blocks(root: BuilderBlock[], localized: Set<BuilderBlock>, flags: 
 		}
 		if (block.children) {
 			values.push(block.children);
-			owners.push(null);
+			owners.push(owner);
 			listed.push(false);
+		}
+		// A block inside another block's component options: the official resolves the holder's
+		// options WHOLE, so a localized value in any field of this block (properties, styles…) is
+		// the holder's too.
+		if (owner) for (const key in obj) {
+			if (key === 'component' || key === 'children' || key === 'options') continue;
+			const v = obj[key];
+			if (typeof v === 'object' && v !== null) {
+				values.push(v);
+				owners.push(owner);
+				listed.push(false);
+			}
 		}
 	}
 	return found;
@@ -277,14 +405,25 @@ function find_blocks_guarded(root: BuilderBlock[], localized: Set<BuilderBlock>,
 				const block = obj as BuilderBlock;
 				found.push(block);
 				if (block.component?.name === 'PersonalizationContainer') flags.personalization = true;
+				else if (block.component?.name === 'Symbol') flags.symbols = true;
+				// (as find_blocks: inside a holder's options, every field of the block is the holder's)
 				for (const [v, o] of [
-					[block.options, null],
+					[block.options, owner],
 					[block.component?.options, block],
-					[block.children, null]
+					[block.children, owner]
 				] as const)
 					if (v && typeof v === 'object') {
 						values.push(v);
 						owners.push(o);
+					}
+				if (owner)
+					for (const key in obj) {
+						if (key === 'component' || key === 'children' || key === 'options') continue;
+						const v = obj[key];
+						if (typeof v === 'object' && v !== null) {
+							values.push(v);
+							owners.push(owner);
+						}
 					}
 				continue;
 			}
@@ -303,7 +442,7 @@ function find_blocks_guarded(root: BuilderBlock[], localized: Set<BuilderBlock>,
 	return found;
 }
 
-function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): Compiled {
+function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean, tag_name: string | undefined): Compiled {
 	const raw_options = block.component?.options;
 	// A block the content walk found to own no localized value skips the walk of its options.
 	const resolved = no_localized ? raw_options : resolve_localized(raw_options, plan.locale);
@@ -313,7 +452,13 @@ function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): 
 	const name = block.component?.name;
 	const comp = name ? lookup(plan.registry, name, plan.model) : null;
 
-	const options: Record<string, unknown> = block.options ? { ...resolved, ...block.options } : (resolved ?? NO_OPTIONS);
+	// (official getBlockComponentOptions: a Text block with a string text spreads its component
+	// options again, last — they win over block.options)
+	const options: Record<string, unknown> = block.options
+		? name === 'Text' && typeof resolved?.text === 'string' && resolved.text !== ''
+			? { ...resolved, ...block.options, ...resolved }
+			: { ...resolved, ...block.options }
+		: (resolved ?? NO_OPTIONS);
 
 	let text_tpl: Compiled['text_tpl'] = null;
 	if (name === 'Text' && typeof resolved?.text === 'string' && resolved.text.includes('{{')) {
@@ -330,8 +475,9 @@ function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): 
 	let cls = block.id ? block.id + ' builder-block' : 'builder-block';
 	if (block.class) cls += ' ' + block.class;
 	if (block.properties?.class) cls += ' ' + block.properties.class;
-	const attrs: Record<string, unknown> = {};
-	if (block.href !== undefined) attrs.href = block.href;
+	// (official getBlockProperties: `{ href: block.href, ...block.properties, … }` — `href` comes first
+	// even when only `properties` has one; an undefined value renders nothing)
+	const attrs: Record<string, unknown> = { href: block.href };
 	if (block.properties) Object.assign(attrs, block.properties);
 	attrs['builder-id'] = block.id;
 	attrs.style = style_attr(block.style);
@@ -367,7 +513,6 @@ function compile_block(block: BuilderBlock, plan: Plan, no_localized: boolean): 
 		};
 	}
 
-	const tag_name = block.tagName;
 	const is_link = tag_name === 'a' || !!block.properties?.href || !!block.href;
 	const tag = is_link ? 'a' : tag_name || 'div';
 
@@ -421,7 +566,7 @@ export function block_css(block: BuilderBlock, plan: Plan): string {
 	if (hover_anim) {
 		hover = css_class(`${class_name}:hover`, {
 			...(hover_anim.steps?.[1]?.styles || {}),
-			transition: `all ${hover_anim.duration}s ${kebab(String(hover_anim.easing))}`,
+			transition: `all ${hover_anim.duration}s ${hover_anim.easing ? camel_to_kebab(String(hover_anim.easing)) : ''}`, // (official camelToKebabCase: '' when none)
 			transitionDelay: hover_anim.delay ? `${hover_anim.delay}s` : '0s'
 		});
 	}
@@ -438,7 +583,7 @@ export function plan_for(key_obj: object, opts: PlanOptions, blocks: BuilderBloc
 	let rid = registry_ids.get(opts.registry);
 	if (rid === undefined) registry_ids.set(opts.registry, (rid = next_registry_id++));
 	const bp = opts.breakpoints;
-	const key = `${rid}|${opts.model}|${opts.locale ?? ''}|${bp ? `${bp.xsmall}|${bp.small}|${bp.medium}` : ''}`;
+	const key = `${rid}|${opts.model}|${opts.locale ?? ''}|${bp ? `${bp.xsmall}|${bp.small}|${bp.medium}` : ''}${opts.live ? '|live' : ''}`;
 	let by_key = plans.get(key_obj);
 	if (!by_key) plans.set(key_obj, (by_key = new Map()));
 	let plan = by_key.get(key);

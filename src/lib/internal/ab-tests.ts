@@ -1,5 +1,7 @@
 /** A/B test variants (official helpers/ab-tests.ts + components/content-variants/helpers.ts). */
 import type { BuilderContent } from '../types.js';
+import { css_safe } from './css.js';
+import { script_safe } from './tags.js';
 import { get_cookie, set_cookie } from './track.js';
 import { UPDATE_COOKIES_AND_STYLES_SCRIPT, UPDATE_VARIANT_VISIBILITY_SCRIPT } from './vendor/variants-fns.js';
 import {
@@ -52,7 +54,9 @@ function test_fields(item: BuilderContent, group: string) {
 
 /** official `handleABTestingSync` / `handleABTesting` (browser: the cookie decides, else a draw). */
 export function handle_ab_testing(item: BuilderContent | null | undefined, can_track: boolean): BuilderContent | null | undefined {
-	if (!can_track || !item || !has_variations(item)) return item;
+	if (!can_track) return item;
+	if (!item) return undefined;
+	if (!has_variations(item)) return item;
 	let group = get_cookie(test_key(item.id!), true);
 	if (!group) {
 		group = random_variation_id(item.id!, item.variations!);
@@ -74,16 +78,23 @@ export const INIT_PERSONALIZATION_FNS = `
   window.updateVisibilityStylesScript = ${UPDATE_VISIBILITY_STYLES_SCRIPT}
   `;
 
-export const update_cookie_and_styles_script = (variants: Array<{ id: string; testRatio?: number }>, content_id: string) => `
-  window.${UPDATE_COOKIES_AND_STYLES_NAME}(
-    "${content_id}",${JSON.stringify(variants)}, false, false
-  )`;
+// (ids are JSON-quoted — the official `"${id}"` for any id without a quote or backslash — and the
+// text made safe for its tag: ids and variants come from content, see tags.ts `script_safe`)
+const quote = (s: unknown) => JSON.stringify(String(s));
 
-export const update_variant_visibility_script = (variation_id: string, content_id: string) => `window.${UPDATE_VARIANT_VISIBILITY_NAME}(
-    "${variation_id}", "${content_id}", false
-  )`;
+export const update_cookie_and_styles_script = (variants: Array<{ id: string; testRatio?: number }>, content_id: string) =>
+	script_safe(`
+  window.${UPDATE_COOKIES_AND_STYLES_NAME}(
+    ${quote(content_id)},${JSON.stringify(variants)}, false, false
+  )`);
+
+export const update_variant_visibility_script = (variation_id: string, content_id: string) =>
+	script_safe(`window.${UPDATE_VARIANT_VISIBILITY_NAME}(
+    ${quote(variation_id)}, ${quote(content_id)}, false
+  )`);
 
 export const script_tag = (id: string, nonce: string, body: string) =>
 	`<script  data-id=${id}  nonce=${nonce || ''}>${body}</` + `script>`;
+/** (the body is CSS built from variation ids: made safe for its tag, css.ts `css_safe`) */
 export const style_tag = (id: string, nonce: string, body: string) =>
-	`<style  data-id=${id}  nonce=${nonce}  >${body}</style>`;
+	`<style  data-id=${id}  nonce=${nonce}  >${css_safe(body)}</style>`;

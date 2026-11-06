@@ -156,8 +156,10 @@ function offset(event: MouseEvent, target: HTMLElement) {
 }
 
 export function interaction_properties(event: MouseEvent) {
-	const target = event.target instanceof HTMLElement ? event.target : null;
-	const builder_el = target && builder_parent(target);
+	// (official: any element target has its offset — an SVG icon too; only an HTML element finds its block)
+	const el = event.target as Element | null;
+	const target = el && typeof el.getBoundingClientRect === 'function' ? (el as HTMLElement) : null;
+	const builder_el = target instanceof HTMLElement ? builder_parent(target) : null;
 	const builder_id = builder_el?.getAttribute('builder-id') || builder_el?.id;
 	return {
 		targetBuilderElement: builder_id || undefined,

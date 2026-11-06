@@ -9,11 +9,11 @@
  * component asked for is built on demand, once per scope.
  */
 import { writable, type Writable } from 'svelte/store';
-import type { BuilderContent, RegisteredComponents } from '../types.js';
+import type { BuilderContent, RegisteredComponent } from '../types.js';
 import type { Plan } from './compile.js';
 import { flatten_state, type EvalScope, type Globals } from './evaluate.js';
 import type { Registry } from './registry.js';
-import { serialize_including_functions } from './editor.js';
+import { NOT_IN_EDITOR, serialize_including_functions } from './editor.js';
 
 export const SCOPE_BRAND = Symbol.for('puruvj.builder.scope');
 
@@ -37,7 +37,14 @@ export interface ContentCtx {
 	/** The reactive render version (client): bumped when root state changes. */
 	version(): number;
 	bump(): void;
+	/** `builderContext` stores with a subscriber, told when the content or root state changes. */
+	listeners: Set<() => void>;
 	root_set_state(next: Record<string, unknown>): void;
+}
+
+/** A repeat item's state layer over its parent's (official `getRepeatItemData`). */
+function item_layer(parent: Record<string, unknown> | undefined, name: string, item: unknown, index: number): Record<string, unknown> {
+	return { ...parent, $index: index, $item: item, [name]: item, [`$${name}Index`]: index };
 }
 
 export class Scope implements EvalScope {
@@ -75,13 +82,20 @@ export class Scope implements EvalScope {
 
 	/** A repeat item's scope (official `getRepeatItemData`). */
 	item(name: string, item: unknown, index: number): Scope {
-		return new Scope(this.ctx, {
-			...this.local,
-			$index: index,
-			$item: item,
-			[name]: item,
-			[`$${name}Index`]: index
-		});
+		return new Scope(this.ctx, item_layer(this.local, name, item, index));
+	}
+
+	/**
+	 * Points this repeat item's scope (made by `parent.item`) at the item now at its index — the list
+	 * changed (reordered, items replaced). In place: the block mounted for this index, and anything
+	 * holding this layer (its `builderContext`, a nested <Blocks>), read the new item.
+	 */
+	retarget(parent: Scope, name: string, item: unknown, index: number): void {
+		const next = item_layer(parent.local, name, item, index);
+		const local = this.local!;
+		for (const key in local) if (!(key in next)) delete local[key];
+		Object.assign(local, next);
+		this.#state = undefined;
 	}
 
 	/** The `builderContext` store (official `BuilderContextInterface`), built on first request. */
@@ -89,7 +103,10 @@ export class Scope implements EvalScope {
 		if (this.#store) return this.#store;
 		const ctx = this.ctx;
 		const value: Record<string | symbol, unknown> = {
-			content: ctx.content,
+			// (live in the editor: a getter, in the official key order)
+			get content() {
+				return ctx.content;
+			},
 			localState: this.local,
 			rootSetState: (next: Record<string, unknown>) => ctx.root_set_state(next),
 			context: ctx.context,
@@ -108,18 +125,28 @@ export class Scope implements EvalScope {
 		// Editor-only data the official SDK serialises for every <Content>: built only if read.
 		Object.defineProperty(value, 'componentInfos', {
 			enumerable: true,
-			get: () => component_infos(ctx.registry.as_object(ctx.model))
+			get: () => component_infos(ctx.registry.by_name.values())
 		});
-		this.#store = writable(value as Record<string, unknown>);
-		return this.#store;
+		// The public contract is a Svelte store (custom components read `$builderContext`): it re-emits
+		// when the content or root state changes, and costs nothing until something subscribes.
+		const store: Writable<Record<string, unknown>> = writable(value as Record<string, unknown>, (set) => {
+			const notify = () => set(value as Record<string, unknown>);
+			ctx.listeners.add(notify);
+			return () => ctx.listeners.delete(notify);
+		});
+		this.#store = store;
+		return store;
 	}
 }
 
-function component_infos(components: RegisteredComponents): Record<string, unknown> {
+/** official Content `componentInfos`: every registered component (any model), serialized —
+ *  minus ours-only entries the official list does not have (RawText). */
+function component_infos(components: Iterable<RegisteredComponent>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
-	for (const name in components) {
-		const { component: _c, ...info } = components[name];
-		out[name] = serialize_including_functions(info);
+	for (const entry of components) {
+		if ((entry as { [NOT_IN_EDITOR]?: boolean })[NOT_IN_EDITOR]) continue;
+		const { component: _c, ...info } = entry;
+		out[entry.name] = serialize_including_functions(info);
 	}
 	return out;
 }

@@ -4,8 +4,8 @@
 	 * their nested content with (official props and markup). It renders in the scope of the nearest
 	 * `<Content>` / repeat item, or of the `context` store it is handed.
 	 */
-	import { getContext, onMount, type Component } from 'svelte';
-	import { is_editing, is_previewing } from '../internal/env.js';
+	import { getContext } from 'svelte';
+	import { is_editing } from '../internal/env.js';
 	import type { BuilderBlock, RegisteredComponent, RegisteredComponents } from '../types.js';
 	import { kebab } from '../internal/css.js';
 	import { SCOPE_KEY } from '../internal/keys.js';
@@ -13,7 +13,6 @@
 	import { plan_for } from '../internal/compile.js';
 	import { scope_of_store, Scope } from '../internal/scope.js';
 	import { plain_html } from '../internal/plain.js';
-	import { load_official } from '../internal/official.js';
 	import { view } from './Block.svelte';
 
 	let {
@@ -48,7 +47,11 @@
 		const base = scope_of_store(context) ?? inherited?.();
 		if (!base) return undefined;
 		const want_registry = registeredComponents ? registry_for(registeredComponents) : base.ctx.registry;
-		const want_link = linkComponent ?? base.ctx.link_component;
+		// The link component is the one handed to THIS list, never inherited (official Blocks reads only
+		// its prop): <Content> and the built-ins that forward it (Columns, Tabs, Accordion, Symbol) hand
+		// it on; a custom component's list, Slot's and PersonalizationContainer's do not, so their link
+		// blocks are plain <a> elements, as with the official SDK.
+		const want_link = linkComponent;
 		if (want_registry === base.ctx.registry && want_link === base.ctx.link_component) return base;
 		// Inherit the context through the prototype (its live `root` getter stays live); a different
 		// registry compiles into its own plan (a block's compiled record depends on the registry).
@@ -56,23 +59,17 @@
 		ctx.link_component = want_link;
 		if (want_registry !== base.ctx.registry) {
 			ctx.registry = want_registry;
-			ctx.plan = plan_for(base.ctx.plan, { ...base.ctx.plan.options, registry: want_registry }, undefined);
+			// (a live base plan is a getter that changes with the editor's breakpoints: follow it)
+			const own_plan = () => plan_for(base.ctx.plan, { ...base.ctx.plan.options, registry: want_registry }, undefined);
+			Object.defineProperty(ctx, 'plan', base.ctx.plan.live ? { get: own_plan } : { value: own_plan(), writable: true });
 		}
 		return new Scope(ctx, base.local);
 	}
 	// svelte-ignore state_referenced_locally
 	const scope = resolve();
 
-	// No scope in the browser. Hydrating server HTML (a component hydrated on its own, e.g. an island):
-	// adopt the server's wrapper and everything in it as is. A fresh mount (inside the official tree, in
-	// the editor or a preview): hand off to the official Blocks.
-	let Official: Component<any> | null = $state(null);
-	let kept_el: HTMLElement | undefined = $state();
-	const authoring = is_editing() || is_previewing();
-	onMount(() => {
-		const hydrated = kept_el?.classList.contains('builder-blocks');
-		if (kept_el && !hydrated && authoring) load_official().then((m) => m && (Official = m.Blocks));
-	});
+	// No scope (a component hydrated on its own, e.g. an island, outside any <Content>): adopt the
+	// server's wrapper and everything in it as is — there is nothing to render it from.
 
 	function data_path(): string | undefined {
 		if (!path) return undefined;
@@ -80,6 +77,20 @@
 		if (path.startsWith('component.options.')) return path;
 		return 'component.options.' + path;
 	}
+
+	/**
+	 * official blocks-wrapper `onClick` / `onMouseEnter`: in the editor, an empty list is where
+	 * "+ Add Block" goes — the editor draws the button, the click on the list tells it where.
+	 */
+	function empty_blocks(type: string) {
+		if (is_editing() && !blocks?.length) window.parent?.postMessage({ type, data: { parentElementId: parent, dataPath: data_path() } }, '*');
+	}
+	const click_empty = () => empty_blocks('builder.clickEmptyBlocks');
+	const hover_empty = () => empty_blocks('builder.hoverEmptyBlocks');
+	// (only once live, inside the editor: a visitor's lists carry no handlers)
+	const editor_handlers = $derived(
+		scope?.ctx.plan.live && is_editing() ? { onclick: click_empty, onkeypress: click_empty, onmouseenter: hover_empty } : {}
+	);
 
 	function style_of(obj: Record<string, unknown> | undefined): string {
 		let out = '';
@@ -107,6 +118,8 @@
 	type Segment = BuilderBlock | { html: string };
 	function segments(list: BuilderBlock[], s: Scope): Segment[] {
 		const plan = s.ctx.plan;
+		// (live: no plain strings — every block is a keyed, live block)
+		if (plan.live) return list;
 		const link = !!s.ctx.link_component;
 		const out: Segment[] = [];
 		let run: { html: string } | null = null;
@@ -127,7 +140,7 @@
 	const list = $derived(blocks && scope ? segments(blocks, scope) : []);
 </script>
 
-{#snippet contents()}{@render children?.()}{#each list as seg (seg)}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}{/snippet}
+{#snippet contents()}{@render children?.()}{#each list as seg (scope.ctx.plan.key(list, seg))}{#if 'html' in seg}{@html seg.html}{:else}{@render view(seg, scope)}{/if}{/each}{/snippet}
 {#snippet nothing()}{/snippet}
 {#snippet tree()}
 	<svelte:element
@@ -136,28 +149,21 @@
 		class={wrapper_class}
 		builder-path={data_path()}
 		builder-parent-id={parent}
+		{...editor_handlers}
 		{...wrapper_props}
 		>{@render contents()}</svelte:element
 	>
 {/snippet}
 <!-- <svelte:element> re-inserts its element on hydration, disconnecting every custom element in it: the default div is a plain element, between empty renders so the server shape stays the same -->
 {#snippet div_tree()}
-	{@render nothing()}<div style={style_of(styleProp)} class={wrapper_class} builder-path={data_path()} builder-parent-id={parent} {...wrapper_props}>{@render contents()}</div>{@render nothing()}
-{/snippet}
-<!-- no children and no attributes: hydration adopts the server's wrapper, whatever its tag, and leaves what is in it -->
-{#snippet kept()}
-	<svelte:element this={'div'} bind:this={kept_el} />
+	{@render nothing()}<div style={style_of(styleProp)} class={wrapper_class} builder-path={data_path()} builder-parent-id={parent} {...editor_handlers} {...wrapper_props}>{@render contents()}</div>{@render nothing()}
 {/snippet}
 <!-- the same without re-inserting the wrapper: the server's wrapper sits between two empty comments, as {@html} hydrates -->
 {#snippet adopted()}
 	{@html '<div></div>'}
 {/snippet}
 
-{#if Official}
-	<Official {blocks} {parent} {path} {styleProp} {BlocksWrapperProps} {context} {className} {linkComponent} {registeredComponents} />
-{:else}
-	{@render (scope ? (wrapper === 'div' ? div_tree : tree) : authoring ? kept : adopted)()}
-{/if}
+{@render (scope ? (wrapper === 'div' ? div_tree : tree) : adopted)()}
 
 <style>
 	.svelteelement {

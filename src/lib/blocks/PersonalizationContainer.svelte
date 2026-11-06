@@ -29,13 +29,12 @@
 	// svelte-ignore state_referenced_locally
 	const ctx = get(builderContext);
 	const locale = ctx?.rootState?.locale as string | undefined;
-	// svelte-ignore state_referenced_locally
-	const id = builderBlock?.id || 'none';
-	// svelte-ignore state_referenced_locally
-	const list = variants || [];
+	// (derived: the editor edits the variants under a mounted container; static content derives once)
+	const id = $derived(builderBlock?.id || 'none');
+	const list = $derived(variants || []);
 	const can_track = ctx?.canTrack ?? true;
-	const should_render_variants = list.length > 0 && !!can_track;
-	const scripts = should_render_variants ? scripts_for(list, id, locale) : null;
+	const should_render_variants = $derived(list.length > 0 && !!can_track);
+	const scripts = $derived(should_render_variants ? scripts_for(list, id, locale, builderBlock?.id) : null);
 	const nonce = ctx?.nonce || '';
 
 	let user_attrs = $state(get_user_attributes_cookie());

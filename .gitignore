@@ -6,6 +6,7 @@ dist/
 .svelte-kit/
 .svelte-dts/
 bench/dist/
+bench/dist-async/
 bench/results/
 e2e/app/build-*/
 e2e/app/.svelte-kit*/
@@ -24,3 +25,5 @@ fixtures/probe/
 # profiles
 bench/prof/
 .check-bundle/
+.check-types/
+coverage/

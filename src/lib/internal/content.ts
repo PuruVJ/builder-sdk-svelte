@@ -27,11 +27,16 @@ export interface ContentInput {
 	nonce?: string;
 }
 
-/** official `getContentInitialValue`: the content with `data` merged into `content.data`. */
+/**
+ * The content a render reads: `data` merged into `content.data` — official `getContentInitialValue`,
+ * then EnableEditor's `mergeNewContent(content)`, which runs on the server too and lays the content's
+ * own data back on top. So a `data` key only fills in what `content.data` does not have (`blocks`,
+ * `cssCode`, `customFonts`…); `data` still wins in root state.
+ */
 export function merged_content(content: BuilderContent | null | undefined, data: Record<string, unknown> | undefined) {
 	if (!content) return undefined;
 	if (!data) return content;
-	return { ...content, data: { ...content.data, ...data }, meta: content.meta } as BuilderContent;
+	return { ...content, data: { ...content.data, ...data, ...content.data }, meta: content.meta } as BuilderContent;
 }
 
 /** official `getRootStateInitialValue` */
@@ -50,11 +55,13 @@ export function initial_root_state(
 /**
  * The plan a content renders from. Keyed by the content OBJECT the app passed: the same object
  * rendered again (an app that caches its fetch) reuses every compiled block; a fresh object compiles
- * once. (When `data` carries its own `blocks`, those are what render: key by that array instead.)
+ * once. (When only `data` carries `blocks`, those are what render: key by that array instead.)
  */
 export function plan_of(input: ContentInput): Plan {
-	// (what merged_content would give, read without building it: `data` wins, `meta` is the content's)
-	const own_blocks = input.data?.blocks as BuilderBlock[] | undefined;
+	// (what merged_content would give, read without building it: the content's own `blocks` win,
+	// `meta` is the content's)
+	const content_data = input.content?.data;
+	const own_blocks = (content_data && 'blocks' in content_data ? undefined : input.data?.blocks) as BuilderBlock[] | undefined;
 	const blocks = own_blocks ?? input.content?.data?.blocks;
 	const key = own_blocks ? (own_blocks as object) : (input.content ?? EMPTY);
 	return plan_for(
@@ -69,13 +76,32 @@ export function plan_of(input: ContentInput): Plan {
 	);
 }
 
+/**
+ * The plan a LIVE content renders from (editor / preview, internal/live.ts): one per `<Content>`
+ * instance (`owner`), outliving every edit, so a block the edit left untouched stays compiled.
+ */
+export function live_plan_of(owner: object, input: ContentInput, content: BuilderContent | undefined): Plan {
+	return plan_for(
+		owner,
+		{
+			registry: registry_for(input.customComponents),
+			model: input.model,
+			locale: input.locale,
+			breakpoints: content?.meta?.breakpoints,
+			live: true
+		},
+		undefined
+	);
+}
+
 export function create_content(
 	input: ContentInput,
 	version: () => number,
-	bump: () => void
+	bump: () => void,
+	live_owner?: object
 ): { ctx: ContentCtx; scope: Scope } {
 	const content = merged_content(input.content, input.data);
-	const plan = plan_of(input);
+	const plan = live_owner ? live_plan_of(live_owner, input, content) : plan_of(input);
 	const registry = plan.registry;
 	let root = initial_root_state(input.content, input.data, input.locale);
 	let initializing = true;
@@ -126,6 +152,7 @@ export function create_content(
 		blocks_wrapper_props: input.blocksWrapperProps ?? {},
 		version,
 		bump,
+		listeners: new Set(),
 		root_set_state(next) {
 			root = next;
 			// A write while this content is being set up (jsCode) is read by the first render; only a
@@ -137,10 +164,14 @@ export function create_content(
 
 	// official Content: run the content's dynamic JS (on both legs, like the official SDK).
 	// Writes it makes land in root state; the render that follows reads them (no re-render needed).
-	const js = content?.data?.jsCode;
+	// (the official Content runs it before EnableEditor re-merges the content: `data`'s jsCode wins)
+	const js = (input.data && 'jsCode' in input.data ? input.data : content?.data)?.jsCode as string | undefined;
 	if (js) {
 		const writable = () => scope.writable_state();
 		evaluate(js, { state: writable, writable_state: writable, globals: ctx.globals, context: ctx.context }, false);
+		// ...and then EnableEditor merges `data` and `locale` into root state again, over what it wrote.
+		if (input.data) root = { ...root, ...input.data };
+		if (input.locale) root = { ...root, locale: input.locale };
 	}
 	initializing = false;
 	return { ctx, scope };

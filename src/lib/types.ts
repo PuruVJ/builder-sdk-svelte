@@ -1,6 +1,12 @@
 import type { Component } from 'svelte';
+import type { BuilderBlock as OfficialBuilderBlock } from './official/types/builder-block.js';
+import type { DeepPartial } from './official/types/deep-partial.js';
 
-/** A Builder block, as the Content API returns it. Loose on purpose: content is data. */
+/**
+ * The renderer's own view of the data: a Builder block, as the Content API returns it. Loose on
+ * purpose (content is data), and with `any` where the official types are interfaces, so a value
+ * typed with the official declarations (what the package exports, src/lib/official) is accepted.
+ */
 export interface BuilderBlock {
 	'@type'?: '@builder.io/sdk:Element';
 	'@version'?: number;
@@ -11,30 +17,30 @@ export interface BuilderBlock {
 	href?: string;
 	children?: BuilderBlock[];
 	responsiveStyles?: {
-		large?: Record<string, unknown>;
-		medium?: Record<string, unknown>;
-		small?: Record<string, unknown>;
-		xsmall?: Record<string, unknown>;
+		large?: Record<string, any>;
+		medium?: Record<string, any>;
+		small?: Record<string, any>;
+		xsmall?: Record<string, any>;
 	};
-	component?: { name: string; options?: Record<string, unknown> };
-	options?: Record<string, unknown>;
+	component?: { name: string; options?: Record<string, any> };
+	options?: Record<string, any>;
 	bindings?: Record<string, string>;
 	actions?: Record<string, string>;
 	properties?: Record<string, string>;
-	style?: Record<string, unknown>;
+	style?: Record<string, any>;
 	repeat?: { collection: string; itemName?: string } | null;
 	animations?: Array<{
 		trigger?: string;
 		duration?: number;
 		delay?: number;
 		easing?: string;
-		steps?: Array<{ styles?: Record<string, unknown> }>;
-		[k: string]: unknown;
+		steps?: Array<{ styles?: Record<string, any> }>;
+		[k: string]: any;
 	}>;
 	hide?: boolean;
 	show?: boolean;
-	meta?: Record<string, unknown>;
-	[k: string]: unknown;
+	meta?: Record<string, any>;
+	[k: string]: any;
 }
 
 export interface BuilderContent {
@@ -45,16 +51,16 @@ export interface BuilderContent {
 	variations?: Record<string, BuilderContent | undefined>;
 	data?: {
 		blocks?: BuilderBlock[];
-		state?: Record<string, unknown>;
-		inputs?: Array<{ name?: string; defaultValue?: unknown }>;
+		state?: Record<string, any>;
+		inputs?: Array<{ name?: string; defaultValue?: any }>;
 		cssCode?: string;
 		jsCode?: string;
 		customFonts?: CustomFont[];
 		httpRequests?: Record<string, string>;
-		[k: string]: unknown;
+		[k: string]: any;
 	};
-	meta?: { breakpoints?: { xsmall?: number; small?: number; medium?: number }; [k: string]: unknown };
-	[k: string]: unknown;
+	meta?: { breakpoints?: { xsmall?: number; small?: number; medium?: number } | null; [k: string]: any };
+	[k: string]: any;
 }
 
 export interface CustomFont {
@@ -82,7 +88,28 @@ export interface RegisteredComponent {
 	noWrap?: boolean;
 	canHaveChildren?: boolean;
 	shouldReceiveBuilderProps?: BuilderPropsFlags;
-	[k: string]: unknown;
+	[k: string]: any;
 }
 
 export type RegisteredComponents = Record<string, RegisteredComponent>;
+
+// ── Official public types that live in official RUNTIME modules (functions/register.ts,
+// functions/set-editor-settings.ts), so they are not vendored with the rest (src/lib/official) ──
+
+export interface InsertMenuItem {
+	name: string;
+	icon?: string;
+	item: DeepPartial<OfficialBuilderBlock>;
+}
+export interface InsertMenuConfig {
+	name: string;
+	priority?: number;
+	persist?: boolean;
+	advanced?: boolean;
+	items: InsertMenuItem[];
+}
+
+/** official `functions/set-editor-settings.ts` */
+export type Settings = {
+	customInsertMenu?: boolean;
+};

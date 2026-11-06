@@ -4,10 +4,10 @@
 	 *
 	 * During SSR with A/B variations every variant renders hidden next to the default (the official
 	 * Svelte strategy: a cookie script picks the winner before paint); after mount only the winner stays.
-	 * Inside Builder's visual editor (or a preview link) the page hands off to the official SDK's
-	 * `<Content>` in the browser; real visitors never load it.
+	 * Inside Builder's visual editor (or a preview link) the view turns live after mount: it takes the
+	 * editor's edits (internal/live.ts). Real visitors never run any of that.
 	 */
-	import { onMount, type Component } from 'svelte';
+	import { onMount } from 'svelte';
 	import type { BuilderContent, RegisteredComponent } from '../types.js';
 	import {
 		get_variants,
@@ -18,11 +18,11 @@
 		style_tag,
 		update_cookie_and_styles_script
 	} from '../internal/ab-tests.js';
-	import { is_editing, is_previewing } from '../internal/env.js';
 	import { plan_of } from '../internal/content.js';
-	import { load_official } from '../internal/official.js';
+	import { is_authoring } from '../internal/live.js';
 	import { set_can_track } from '../internal/user-attributes.js';
 	import ContentView from './ContentView.svelte';
+	import Run from './Run.svelte';
 
 	let props: {
 		content?: BuilderContent | null;
@@ -44,6 +44,8 @@
 		trustedHosts?: string[];
 		nonce?: string;
 		isNestedRender?: boolean;
+		/** (internal: a symbol inside a live tree — a client render, never hydrating — starts live) */
+		startLive?: boolean;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -64,58 +66,74 @@
 			: handle_ab_testing(props.content, can_track)
 	);
 
-	// a new content object (even with the same id) or another winning variation re-renders the view
+	// Inside Builder, after mount: the view is rendered again, live (never while hydrating — the
+	// server rendered the static shape).
+	// svelte-ignore state_referenced_locally
+	let live = $state(props.startLive === true);
+
+	// a new content object (even with the same id), another winning variation, or going live
+	// re-renders the view — except once live (the editor, a preview): there a new content object is
+	// merged into the mounted view (official EnableEditor `mergeNewContent`), so nothing remounts
 	let view_key = {};
 	let keyed_content: unknown = undefined;
 	let keyed_variation: unknown = undefined;
+	// svelte-ignore state_referenced_locally
+	let keyed_live = live;
 	const content_key = $derived.by(() => {
 		const c = props.content;
 		const v = default_content?.testVariationId;
-		if (c !== keyed_content || v !== keyed_variation) {
-			keyed_content = c;
-			keyed_variation = v;
-			view_key = {};
-		}
+		const new_content = c !== keyed_content && !(live && keyed_live);
+		if (new_content || v !== keyed_variation || live !== keyed_live) view_key = {};
+		keyed_content = c;
+		keyed_variation = v;
+		keyed_live = live;
 		return view_key;
 	});
 
-	let Official: Component<any> | null = $state(null);
+	const view_props = $derived.by(() => {
+		const { startLive: _, ...rest } = props;
+		return rest;
+	});
+
+	let view: { update_content(next: BuilderContent | null | undefined): void } | undefined = $state.raw();
+
+	// After the server's variants go, a winning variation re-keys the view: its impression was already
+	// sent by that variation's own (hidden, hydrated) view — official ContentVariants tracks it there
+	// once and never remounts. The new view must not send it again.
+	let impression_sent = $state(false);
+
 	onMount(() => {
+		if (render_variants) impression_sent = true;
 		render_variants = false;
-		if (!props.isNestedRender && (is_editing() || is_previewing())) {
-			load_official().then((m) => m && (Official = m.Content));
-		}
+		if (!live && is_authoring()) live = true;
 	});
 </script>
 
-{#if Official}
-	<Official {...props} />
-{:else}
-	{#if flags && (flags.ab || variants.length)}
-		{@html script_tag('builderio-init-variants-fns', nonce, INIT_VARIANTS_FNS)}
-	{/if}
-	{#if flags?.personalization}
-		{@html script_tag('builderio-init-personalization-variants-fns', nonce, INIT_PERSONALIZATION_FNS)}
-	{/if}
-	{#if render_variants}
-		{@html style_tag(
-			'builderio-variants',
-			nonce,
-			variants.map((v) => `.variant-${v.testVariationId} { display: none; } `).join('')
-		)}
-		{@html script_tag(
-			'builderio-variants-visibility',
-			nonce,
-			update_cookie_and_styles_script(
-				variants.map((v) => ({ id: v.testVariationId, testRatio: v.testRatio })),
-				props.content?.id || ''
-			)
-		)}
-		{#each variants as variant}
-			<ContentView {...props} content={variant} showContent={false} isSsrAbTest={true} />
-		{/each}
-	{/if}
-	{#key content_key}
-		<ContentView {...props} content={default_content} showContent={true} isSsrAbTest={render_variants} />
-	{/key}
+{#if flags && (flags.ab || variants.length)}
+	{@html script_tag('builderio-init-variants-fns', nonce, INIT_VARIANTS_FNS)}
 {/if}
+{#if flags?.personalization}
+	{@html script_tag('builderio-init-personalization-variants-fns', nonce, INIT_PERSONALIZATION_FNS)}
+{/if}
+{#if render_variants}
+	{@html style_tag(
+		'builderio-variants',
+		nonce,
+		variants.map((v) => `.variant-${v.testVariationId} { display: none; } `).join('')
+	)}
+	{@html script_tag(
+		'builderio-variants-visibility',
+		nonce,
+		update_cookie_and_styles_script(
+			variants.map((v) => ({ id: v.testVariationId, testRatio: v.testRatio })),
+			props.content?.id || ''
+		)
+	)}
+	{#each variants as variant}
+		<ContentView {...view_props} content={variant} showContent={false} isSsrAbTest={true} />
+	{/each}
+{/if}
+{#key content_key}
+	<ContentView bind:this={view} {...view_props} content={default_content} showContent={true} isSsrAbTest={render_variants} {live} trackImpression={!impression_sent} />
+{/key}
+{#if live}{#key props.content}<Run run={() => view?.update_content(default_content)} />{/key}{/if}

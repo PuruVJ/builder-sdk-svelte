@@ -5,6 +5,12 @@
  * EVERY `getProcessedBlock` call — ~107 times per block per render, the single largest SSR cost it
  * has. Here each block's options are resolved once, when the block is compiled, and the result is
  * cached with it. The input is never mutated.
+ *
+ * The official walk replaces values IN PLACE across the whole options tree, nested blocks included,
+ * so a component whose options hold blocks (a container's `items`, Columns' `columns[].blocks`)
+ * receives them already resolved. Here a nested block is resolved whole, once per locale, into a
+ * copy shared by every ancestor that holds it; a copy that renders the same as its block (only its
+ * component options or children changed — each of those resolves on its own) compiles as that block.
  */
 
 const LOCALIZED_TYPE = '@builder.io/core:LocalizedValue';
@@ -28,14 +34,64 @@ export function resolve_localized(
 	return out as Record<string, unknown>;
 }
 
+/** Nested blocks resolved whole, per locale (see the header): one copy per block. */
+const resolved_blocks = new Map<string, WeakMap<object, unknown>>();
+/** A resolved copy → its block, when the copy renders as the block does. */
+const renders_as = new WeakMap<object, object>();
+/** Every resolved copy → its block. */
+const copied_from = new WeakMap<object, object>();
+/** Every resolved copy → the locale it was resolved for. */
+const copy_locale = new WeakMap<object, string>();
+
+/**
+ * The block a resolved nested-block copy renders exactly as, or undefined. With `locale`: only when
+ * the copy was resolved for that locale — a copy handed to a nested content (a symbol's, which has
+ * no locale of its own) is already resolved for its parent's, and renders as itself.
+ */
+export function original_block<T extends object>(copy: T, locale?: string): T | undefined {
+	if (locale !== undefined && copy_locale.get(copy) !== locale) return undefined;
+	return renders_as.get(copy) as T | undefined;
+}
+
+/** The block a resolved nested-block copy was made from (itself when it is not a copy). */
+export function source_block<T extends object>(block: T): T {
+	return (copied_from.get(block) as T | undefined) ?? block;
+}
+
+/** The objects `walk` is inside: a cycle (only in hand-built content) is left as it is, as the
+ *  official traverse (a visited set) leaves it, instead of overflowing the stack. */
+const active = new Set<object>();
+
 function walk(value: unknown, locale: string): unknown {
 	if (value === null || typeof value !== 'object') return value;
+	if (active.has(value)) return value;
+	active.add(value);
+	try {
+		return walk_object(value, locale);
+	} finally {
+		active.delete(value);
+	}
+}
+
+function walk_object(value: object, locale: string): unknown {
 	const obj = value as Record<string, unknown>;
-	if (obj['@type'] === LOCALIZED_TYPE) return obj[locale] ?? undefined;
-	// A nested block is compiled (and localized) on its own — its options are not this block's.
-	// The official walk descends into nested blocks too; the value each of them ends up rendering
-	// is the same either way, because every block resolves its own options.
-	if (obj['@type'] === ELEMENT_TYPE) return value;
+	// (the official walk also descends into the localized object it replaced: so does this)
+	if (obj['@type'] === LOCALIZED_TYPE) return walk(obj[locale], locale) ?? undefined;
+	if (obj['@type'] === ELEMENT_TYPE) {
+		let blocks = resolved_blocks.get(locale);
+		if (!blocks) resolved_blocks.set(locale, (blocks = new WeakMap()));
+		let out = blocks.get(obj);
+		if (out === undefined) {
+			out = walk_entries(obj, locale);
+			blocks.set(obj, out);
+			if (out !== obj) {
+				copied_from.set(out as object, obj);
+				copy_locale.set(out as object, locale);
+				if (same_render(obj, out as Record<string, unknown>)) renders_as.set(out as object, obj);
+			}
+		}
+		return out;
+	}
 	if (Array.isArray(value)) {
 		let out: unknown[] | null = null;
 		for (let i = 0; i < value.length; i++) {
@@ -44,11 +100,74 @@ function walk(value: unknown, locale: string): unknown {
 		}
 		return out ?? value;
 	}
+	return walk_entries(obj, locale);
+}
+
+function walk_entries(obj: Record<string, unknown>, locale: string): unknown {
 	let out: Record<string, unknown> | null = null;
 	for (const key in obj) {
 		const cur = obj[key];
 		const next = walk(cur, locale);
 		if (next !== cur) (out ??= { ...obj })[key] = next;
 	}
-	return out ?? value;
+	return out ?? obj;
+}
+
+/** Only `component.options` changed, and children that themselves render as their blocks: the block
+ *  resolves its own options when it renders, and each child its own. */
+function same_render(block: Record<string, unknown>, copy: Record<string, unknown>): boolean {
+	for (const key in block) {
+		if (block[key] === copy[key]) continue;
+		if (key === 'children') {
+			const a = block.children as unknown[];
+			const b = copy.children as unknown[];
+			for (let i = 0; i < a.length; i++) if (a[i] !== b[i] && renders_as.get(b[i] as object) !== a[i]) return false;
+			continue;
+		}
+		if (key !== 'component') return false;
+		const a = block.component as Record<string, unknown>;
+		const b = copy.component as Record<string, unknown>;
+		for (const k in a) if (k !== 'options' && a[k] !== b[k]) return false;
+	}
+	return true;
+}
+
+/**
+ * Blocks whose options hold (at any depth, through nested blocks) a block that owns a localized
+ * value own one too, as the official walk sees it: added to `localized`. One more walk over the
+ * content, run only when it has localized values at all. Gives up after `budget` objects (a cycle).
+ */
+export function mark_option_owners(root: unknown[], localized: Set<object>, budget: number): void {
+	type Chain = { block: object; up: Chain } | null;
+	const values: unknown[] = [root];
+	const chains: Chain[] = [null];
+	while (values.length) {
+		if (--budget === 0) return;
+		const value = values.pop();
+		const chain = chains.pop()!;
+		if (value === null || typeof value !== 'object') continue;
+		const obj = value as Record<string, unknown>;
+		if (!Array.isArray(value) && obj['@type'] === ELEMENT_TYPE) {
+			// Pre-order: an ancestor that owns one was met first and has marked its own ancestors.
+			if (localized.has(obj)) for (let c: Chain = chain; c && !localized.has(c.block); c = c.up) localized.add(c.block);
+			const component = obj.component as Record<string, unknown> | null | undefined;
+			if (component?.options) {
+				values.push(component.options);
+				chains.push({ block: obj, up: chain });
+			}
+			for (const key in obj) {
+				if (key === 'component') continue;
+				values.push(obj[key]);
+				chains.push(chain);
+			}
+			continue;
+		}
+		// A localized value anywhere under a block's options (a nested block's properties or styles
+		// too: the official walks those options whole) is owned by every block up the chain.
+		if (obj['@type'] === LOCALIZED_TYPE) for (let c: Chain = chain; c && !localized.has(c.block); c = c.up) localized.add(c.block);
+		for (const key in obj) {
+			values.push(obj[key]);
+			chains.push(chain);
+		}
+	}
 }

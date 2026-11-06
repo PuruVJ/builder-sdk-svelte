@@ -51,3 +51,6 @@ export function set_editor_settings(next: Record<string, unknown>): void {
 		parent.postMessage({ type: 'builder.settingsChange', data: settings }, '*');
 	}
 }
+
+/** On a registration entry: ours only (not in the official list), so the editor is never told of it. */
+export const NOT_IN_EDITOR = Symbol.for('puruvj.builder.not-in-editor');

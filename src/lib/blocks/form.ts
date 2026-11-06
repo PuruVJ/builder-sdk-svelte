@@ -18,14 +18,17 @@ export function get_at(obj: unknown, path: string, default_value?: unknown): unk
 	return res === undefined || res === obj ? default_value : res;
 }
 
-/** official lodash-style `set(obj, path, value)`: missing containers become arrays before an index. */
+/** official lodash-style `set(obj, path, value)`: missing containers become arrays before an index
+ *  (never through an inherited property: see below). */
 export function set_at(obj: Record<string, unknown>, path: string, value: unknown): void {
 	const keys = parse_path(path);
 	if (!keys.length) return;
 	let node = obj as Record<string, unknown>;
 	for (let i = 0; i < keys.length - 1; i++) {
 		const key = keys[i];
-		const next = node[key];
+		// Only an OWN container is walked into: a field named `__proto__.x` or `constructor.prototype.x`
+		// (names come from content) must never write onto a shared prototype. (The official `set` does.)
+		const next = Object.prototype.hasOwnProperty.call(node, key) ? node[key] : undefined;
 		if (Object(next) === next) node = next as Record<string, unknown>;
 		else {
 			const child = Math.abs(Number(keys[i + 1])) >> 0 === +keys[i + 1] ? [] : {};
