@@ -103,7 +103,7 @@
 		"bench:ssr": "node bench/ssr.mjs",
 		"bench:app": "node --expose-gc bench/app-page.mjs",
 		"bench:client": "node bench/client.mjs",
-		"e2e:build": "pnpm --filter ./e2e/suite build && pnpm --filter ./e2e/app build:official && pnpm --filter ./e2e/app build:ours",
+		"e2e:build": "pnpm --filter ./e2e/suite build && pnpm --filter ./e2e/app build:official && pnpm --filter ./e2e/app build:latest && pnpm --filter ./e2e/app build:ours",
 		"e2e:official": "cd e2e/suite && SERVER_NAME=sveltekit BUILDER_SDK=official TEST_TYPE=e2e playwright test",
 		"e2e:ours": "cd e2e/suite && SERVER_NAME=sveltekit BUILDER_SDK=ours TEST_TYPE=e2e playwright test",
 		"e2e:build:async": "pnpm --filter ./e2e/suite build && pnpm --filter ./e2e/app build:ours:async",

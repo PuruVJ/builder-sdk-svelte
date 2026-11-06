@@ -2,7 +2,9 @@
 // how many components get new props, how many remount, and how long until the edit is on screen —
 // at full speed and with the CPU slowed 6× (a low-end Windows laptop). Needs `pnpm e2e:build`.
 //
-// The official SDK's numbers are measured and printed for comparison; only ours is held to a budget.
+// The official SDK's numbers — the release this is a fork of (5.2.0) and the newest official release
+// (`latest`, when its build exists: `pnpm e2e:build`) — are measured and printed for comparison; only
+// ours is held to a budget.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { chromium, type Browser, type Frame, type Page } from 'playwright';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -11,8 +13,11 @@ import path from 'node:path';
 import { perf_content } from '../e2e/app/src/routes/editor-perf/content.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const SDKS = { official: 4471, ours: 4472 } as const;
-const built = Object.keys(SDKS).every((sdk) => fs.existsSync(path.join(ROOT, `e2e/app/build-${sdk}`)));
+const exists = (sdk: string) => fs.existsSync(path.join(ROOT, `e2e/app/build-${sdk}`));
+const ALL = { official: 4471, latest: 4473, ours: 4472 } as const;
+// (official and ours are required; the newest official release is compared when it is built)
+const SDKS = Object.fromEntries(Object.entries(ALL).filter(([sdk]) => sdk !== 'latest' || exists(sdk))) as Partial<typeof ALL>;
+const built = exists('official') && exists('ours');
 const SECTIONS = 100; // 100 sections × 3 Cards = 300 custom components
 
 let browser: Browser;
@@ -167,9 +172,17 @@ describe.skipIf(!built)('one editor edit costs what changed', () => {
 
 	for (const cpu of [1, 6]) {
 		it(`${SECTIONS * 3} custom components, CPU ${cpu}×`, async () => {
-			const official = await run(SDKS.official, cpu).catch((e) => ({ results: { failed: String(e) }, errors: [] }));
-			const ours = await run(SDKS.ours, cpu);
-			console.log(`CPU ${cpu}× — official:`, JSON.stringify(official.results), '\n        ours:', JSON.stringify(ours.results));
+			const measure = (port: number) => run(port, cpu).catch((e) => ({ results: { failed: String(e) }, errors: [] }));
+			const official = await measure(SDKS.official!);
+			const latest = SDKS.latest ? await measure(SDKS.latest) : null;
+			const ours = await run(SDKS.ours!, cpu);
+			console.log(
+				`CPU ${cpu}× — official 5.2.0:`,
+				JSON.stringify(official.results),
+				...(latest ? ['\n        official latest:', JSON.stringify(latest.results)] : []),
+				'\n        ours:',
+				JSON.stringify(ours.results)
+			);
 			expect(ours.errors).toEqual([]);
 			const r = ours.results;
 			// Nothing a Text edit touches is a custom component: none gets new props, none remounts.
