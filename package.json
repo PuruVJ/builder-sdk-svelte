@@ -94,7 +94,6 @@
 		"prepublishOnly": "pnpm build",
 		"changeset": "changeset",
 		"changeset:version": "changeset version && pnpm install --lockfile-only",
-		"changeset:publish": "changeset publish",
 		"fixtures": "node scripts/gen-fixtures.mjs",
 		"pretest": "pnpm fixtures && pnpm bench:build",
 		"test": "vitest run",
