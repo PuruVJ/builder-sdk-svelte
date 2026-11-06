@@ -92,6 +92,9 @@
 	"scripts": {
 		"build": "tsdown && node scripts/check-dist-svelte.mjs && node scripts/check-dist-bundle.mjs",
 		"prepublishOnly": "pnpm build",
+		"changeset": "changeset",
+		"changeset:version": "changeset version && pnpm install --lockfile-only",
+		"changeset:publish": "changeset publish",
 		"fixtures": "node scripts/gen-fixtures.mjs",
 		"pretest": "pnpm fixtures && pnpm bench:build",
 		"test": "vitest run",
@@ -117,6 +120,8 @@
 	"devDependencies": {
 		"@builder.io/sdk-svelte": "5.2.0",
 		"@builder.io/sdk-svelte-latest": "npm:@builder.io/sdk-svelte@5.4.2",
+		"@changesets/changelog-github": "^1.0.1",
+		"@changesets/cli": "^3.0.3",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@types/node": "^22.20.4",
 		"@vitest/coverage-v8": "3.2.7",
@@ -131,5 +136,9 @@
 		"typescript": "^5.9.3",
 		"vite": "^7.3.6",
 		"vitest": "^3.2.7"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
 	}
 }
