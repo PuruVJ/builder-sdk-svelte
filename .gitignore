@@ -27,3 +27,4 @@ bench/prof/
 .check-bundle/
 .check-types/
 coverage/
+.turbo/

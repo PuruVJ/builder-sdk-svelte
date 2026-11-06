@@ -1,5 +1,7 @@
 # Every push to main and every pull request: build, then the whole suite — the in-process tests (unit,
-# component, parity, fuzz) and the browser tests against the e2e app built with both SDKs.
+# component, parity, fuzz) and the browser tests against the e2e app built with each SDK. Every step
+# goes through Turborepo (turbo.json) with the remote cache: what did not change is not rebuilt or
+# re-run.
 name: test
 
 on:
@@ -9,6 +11,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   test:
@@ -22,11 +28,20 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # Turborepo's local cache, kept between runs by GitHub's cache (the remote cache, when set up,
+      # is consulted too: a task misses only when neither has it)
+      - uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.job }}-
+            turbo-${{ runner.os }}-
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm build
-      - run: pnpm fixtures && pnpm bench:build
-      - run: pnpm e2e:build
-      - run: pnpm vitest run --exclude tests/editor-fuzz.test.ts --exclude tests/editor-perf.test.ts
-      # the long ones, lighter: a few fuzz seeds; perf numbers printed (CI machines are noisy)
-      - run: EDITOR_FUZZ_SEEDS=2 pnpm vitest run tests/editor-fuzz.test.ts
+      # the library, fixtures, the bench bundle, the e2e app per SDK, then every test but the long two
+      - run: pnpm turbo run test:ci
+      # the long ones, lighter: a few fuzz seeds (the perf test runs locally: CI machines are noisy)
+      - run: pnpm turbo run test:editor-fuzz
+        env:
+          EDITOR_FUZZ_SEEDS: 2

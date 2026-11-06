@@ -349,10 +349,18 @@ Normal visitors run none of this, and never download it.
 
 ```sh
 pnpm install
-pnpm build              # dist/ (the e2e app and the type tests use it)
-pnpm e2e:build          # the SvelteKit e2e app, built once per SDK (the browser tests use it)
-pnpm test               # generates fixtures, builds the bench bundle, runs every test
+pnpm test               # everything: the library, fixtures, the bench bundle, the e2e app per SDK, every test
 ```
+
+Builds and test runs go through [Turborepo](https://turborepo.com) (`turbo.json`): a step whose
+inputs did not change is replayed from the cache, not run. `pnpm turbo run build` builds the library,
+`pnpm e2e:build` the SvelteKit e2e app once per SDK (the browser tests use it). Captured pages in
+`fixtures/real` are part of the test steps' inputs, so adding one re-runs them.
+
+The cache is shared through Turborepo's remote cache (Vercel) once you link it: `pnpm turbo login`
+then `pnpm turbo link`. CI uses the same cache (the `TURBO_TOKEN` secret and `TURBO_TEAM` variable),
+plus GitHub's cache of `.turbo/cache`, so a commit CI already built is not built again, locally or
+in CI.
 
 | Command | What runs |
 | --- | --- |
