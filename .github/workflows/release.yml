@@ -56,7 +56,8 @@ jobs:
       - if: steps.unpublished.outputs.version
         run: pnpm build
       - if: steps.unpublished.outputs.version
-        run: npm publish --provenance --access public
+        # (a pre-release version: npm needs the tag named; `latest` is what apps install)
+        run: npm publish --provenance --access public --tag latest
       - if: steps.unpublished.outputs.version
         run: |
           git tag "v${{ steps.unpublished.outputs.version }}"

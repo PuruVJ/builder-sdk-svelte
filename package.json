@@ -1,7 +1,7 @@
 {
 	"name": "@puruvj/builder-sdk-svelte",
-	"version": "0.0.10",
-	"description": "A hot-path-proof, scale-proof Builder.io renderer for Svelte 5 — a drop-in for @builder.io/sdk-svelte",
+	"version": "5.2.0-fork.10",
+	"description": "A rewrite of @builder.io/sdk-svelte 5.2.0 for Svelte 5: a hot-path-proof, scale-proof Builder.io renderer, a drop-in for the official SDK (versions are 5.2.0-fork.N: the official release it forks, and our release number)",
 	"license": "MIT",
 	"author": "Puru Vijayvargia",
 	"repository": {
