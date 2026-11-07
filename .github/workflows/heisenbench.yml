@@ -1,0 +1,92 @@
+# Every pull request: count the work of the PR and of the commit it branched from with Heisenbench
+# (exact steps per function and line, the same on every run: bench/count/), and post the difference
+# as one comment, updated on each push. On Node 26 (Heisenbench needs 26.4+); the library's own tests
+# stay on 22 (test.yml). The counts do not depend on the Node version.
+name: heisenbench
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heisenbench-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  count:
+    # Runs the PR's code, so it can write nothing: no token is left in the checkout.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      # (pnpm version from package.json `packageManager`)
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Count the PR and its base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          out="$RUNNER_TEMP/heisenbench"
+          mkdir -p "$out"
+          base=$(git merge-base "$BASE_SHA" HEAD)
+          # the inputs, and the server bundle whose HTML the client bench hydrates
+          pnpm fixtures > /dev/null && pnpm bench:build
+          # A bench file that does not load, or a case that fails, is in the report: not fatal.
+          node bench/count/run.ts --out-dir "$out/head" || true
+          # growth: the cases with a `scale`, at 1x, 10x, 100x the page (pnpm bench:growth)
+          pnpm bench:growth --out "$out/head/report.json" || true
+          if git cat-file -e "$base:bench/count/run.ts" 2> /dev/null; then
+            # the base has counted benches of its own: count it in its own checkout
+            git worktree add -q "$RUNNER_TEMP/base" "$base"
+            (cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile && pnpm fixtures > /dev/null && pnpm bench:build &&
+              node bench/count/run.ts --out-dir "$out/base" && pnpm bench:growth --out "$out/base/report.json") || true
+          else
+            # the first PR: this PR's bench files on the base's code
+            node bench/count/run.ts --source-from "$base" --out-dir "$out/base" || true
+          fi
+          pnpm exec heisenbench diff "$out/base/report.json" "$out/head/report.json" --repo "$GITHUB_WORKSPACE" \
+            --out "$out/section.md"
+          cat "$out/section.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: heisenbench
+          path: |
+            ${{ runner.temp }}/heisenbench/section.md
+            ${{ runner.temp }}/heisenbench/*/report.json
+
+  comment:
+    # Holds the write token and runs nothing from the PR: it reads section.md as text.
+    needs: count
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: heisenbench
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- heisenbench-comment -->'
+          body="$(printf '%s\n\n%s' "$marker" "$(head -c 60000 section.md)")"
+          id=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh api "repos/$GH_REPO/issues/$PR/comments" -f body="$body" > /dev/null
+          fi
