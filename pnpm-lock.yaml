@@ -191,8 +191,8 @@ importers:
         specifier: ^21.0.4
         version: 21.0.4
       heisenbench:
-        specifier: https://pkg.pr.new/ogygiajs/bench/heisenbench@071d5eb
-        version: https://pkg.pr.new/ogygiajs/bench/heisenbench@071d5eb(playwright@1.63.0)(svelte@5.57.1)(typescript@5.9.3)
+        specifier: https://pkg.pr.new/ogygiajs/bench/heisenbench@30b05cf
+        version: https://pkg.pr.new/ogygiajs/bench/heisenbench@30b05cf(playwright@1.63.0)(svelte@5.57.1)(typescript@5.9.3)
       parse5:
         specifier: ^8.0.1
         version: 8.0.1
@@ -1669,9 +1669,9 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
-  heisenbench@https://pkg.pr.new/ogygiajs/bench/heisenbench@071d5eb:
-    resolution: {integrity: sha512-QOVexcgnQq+wO1RazXZmjxPWnbzuHF76sesOPfcA5u8H1Dq4w90EmYq5FYqv4cRBuw1SoMGneiUmwFT5lFbmdg==, tarball: https://pkg.pr.new/ogygiajs/bench/heisenbench@071d5eb}
-    version: 0.0.1-next.071d5eb
+  heisenbench@https://pkg.pr.new/ogygiajs/bench/heisenbench@30b05cf:
+    resolution: {integrity: sha512-7t9QknbeojkpRWBHBmXGkyY8LUefzn3eiXV73uhO8OX/TSduvQkTZut+giF4I/1vWdx0MngL7IhN4sSj/ueBtw==, tarball: https://pkg.pr.new/ogygiajs/bench/heisenbench@30b05cf}
+    version: 0.0.1-next.30b05cf
     engines: {node: '>=26.4'}
     hasBin: true
     peerDependencies:
@@ -3677,7 +3677,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  heisenbench@https://pkg.pr.new/ogygiajs/bench/heisenbench@071d5eb(playwright@1.63.0)(svelte@5.57.1)(typescript@5.9.3):
+  heisenbench@https://pkg.pr.new/ogygiajs/bench/heisenbench@30b05cf(playwright@1.63.0)(svelte@5.57.1)(typescript@5.9.3):
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/trace-mapping': 0.3.31
