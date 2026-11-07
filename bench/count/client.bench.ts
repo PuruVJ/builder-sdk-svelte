@@ -41,23 +41,21 @@ for (const name of ['gen/page-50k', 'gen/feat-bindings']) {
 	const raw = fixture_text(name);
 	const fresh = () => spec_of(raw).content;
 
-	bench(`client · ${name} · hydrate server HTML`, ({ el, content }) => {
-		hydrate(Content, { target: el, props: props_of(content) as never });
+	// (props, the component list included, are made in setup: only the SDK's work is counted)
+	bench(`client · ${name} · hydrate server HTML`, ({ el, props }) => {
+		hydrate(Content, { target: el, props: props as never });
 		flushSync();
 		return el.childElementCount;
 	}, {
-		setup: async () => {
-			const content = fresh();
-			return { el: target(await server_html(fresh())), content };
-		}
+		setup: async () => ({ el: target(await server_html(fresh())), props: props_of(fresh()) })
 	});
 
-	bench(`client · ${name} · mount`, ({ el, content }) => {
-		mount(Content, { target: el, props: props_of(content) as never });
+	bench(`client · ${name} · mount`, ({ el, props }) => {
+		mount(Content, { target: el, props: props as never });
 		flushSync();
 		return el.childElementCount;
 	}, {
-		setup: () => ({ el: target(), content: fresh() })
+		setup: () => ({ el: target(), props: props_of(fresh()) })
 	});
 
 	/** A mounted page, and the content it will be handed next. */
