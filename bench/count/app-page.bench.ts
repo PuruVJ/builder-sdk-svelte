@@ -7,6 +7,7 @@
 import { bench } from 'heisenbench/bench';
 import { app_components, render_app_page, type AppRoot, type Sdk } from '../entry.ts';
 import { fixture_text, names_in, spec_of } from './data.ts';
+import { registry_for } from '../../src/lib/internal/registry.ts';
 
 const KINDS: Array<[string, 'inline' | 'body']> = [
 	['accessibilityContent', 'inline'],
@@ -46,3 +47,16 @@ for (const [page, sdks] of PAGES) {
 		});
 	}
 }
+
+// A new custom component list (an inline list made per request), and no list, each asked for twice:
+// the second of each is the cached registry.
+const custom_list = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `Custom ${i}`, component: null }));
+bench('registry · a new list of 50 custom components, asked for twice', ({ list }) => {
+	registry_for(undefined);
+	registry_for(undefined);
+	registry_for(list as never).as_object('page');
+	return registry_for(list as never).as_object('page');
+}, {
+	setup: () => ({ list: custom_list(50) }),
+	scale: (_ctx, factor) => ({ list: custom_list(Math.round(50 * factor)) })
+});
