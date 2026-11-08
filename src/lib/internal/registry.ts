@@ -43,12 +43,14 @@ export function registry_for(custom: RegisteredComponent[] | RegisteredComponent
 }
 
 function build(custom: RegisteredComponent[]): Registry {
-	return build_exact([...default_components(), ...custom]);
+	return build_exact(default_components(), custom);
 }
 
-function build_exact(list: RegisteredComponent[]): Registry {
+/** @heisenbench linear in list */
+function build_exact(list: RegisteredComponent[], more?: RegisteredComponent[]): Registry {
 	const by_name = new Map<string, RegisteredComponent>();
 	for (const entry of list) if (entry?.name) by_name.set(entry.name, entry);
+	if (more) for (const entry of more) if (entry?.name) by_name.set(entry.name, entry);
 	const objects = new Map<string, RegisteredComponents>();
 	const registry: Registry = {
 		[REGISTRY_BRAND]: true,
