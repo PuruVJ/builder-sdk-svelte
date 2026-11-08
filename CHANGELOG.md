@@ -1,5 +1,13 @@
 # @puruvj/builder-sdk-svelte
 
+## 5.2.0-fork.12
+
+### Patch Changes
+
+- [#7](https://github.com/PuruVJ/builder-sdk-svelte/pull/7) [`009684b`](https://github.com/PuruVJ/builder-sdk-svelte/commit/009684bd01b939d06d8797dd81aedf42f7b268bd) Thanks [@PuruVJ](https://github.com/PuruVJ)! - Faster live editing: applying an edit no longer builds a throwaway copy of every unchanged part of the page.
+
+- [#7](https://github.com/PuruVJ/builder-sdk-svelte/pull/7) [`009684b`](https://github.com/PuruVJ/builder-sdk-svelte/commit/009684bd01b939d06d8797dd81aedf42f7b268bd) Thanks [@PuruVJ](https://github.com/PuruVJ)! - Slightly faster first render for a new custom component list: its registry is built without copying the built-in list.
+
 ## 5.2.0-fork.11
 
 ### Minor Changes
