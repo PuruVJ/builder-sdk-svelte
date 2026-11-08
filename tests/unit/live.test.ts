@@ -157,6 +157,22 @@ describe('reconcile', () => {
 		expect(reconcile({}, { toString: 'x' })).toEqual({ toString: 'x' });
 	});
 
+	it('a change after untouched keys and items: those before it are shared, `__proto__` stays own', () => {
+		const prev = deep_freeze(JSON.parse('{"__proto__": {"x": 1}, "a": {"k": 1}, "list": [{"v": 1}, {"v": 2}, {"v": 3}], "b": 1}'));
+		const out = reconcile(prev, JSON.parse('{"__proto__": {"x": 1}, "a": {"k": 1}, "list": [{"v": 1}, {"v": 2}, {"v": 4}], "b": 1}')) as any;
+		expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+		expect(Object.keys(out)).toEqual(['__proto__', 'a', 'list', 'b']);
+		expect(out.__proto__).toBe(prev.__proto__);
+		expect(out.a).toBe(prev.a);
+		expect(out.list).not.toBe(prev.list);
+		expect(out.list[0]).toBe(prev.list[0]);
+		expect(out.list[1]).toBe(prev.list[1]);
+		expect(out.list[2]).toEqual({ v: 4 });
+		expect(reconcile([{ v: 1 }], [])).toEqual([]);
+		expect(reconcile({ a: 1 }, {})).toEqual({});
+		expect(reconcile([], [])).toEqual([]);
+	});
+
 	it('NaN, Infinity, -0, unicode, long strings', () => {
 		const prev = deep_freeze({ n: NaN, i: Infinity, z: -0, u: '✓ü𝄞', l: 'x'.repeat(100000) });
 		const next = { n: NaN, i: Infinity, z: -0, u: '✓ü𝄞', l: 'x'.repeat(100000) };

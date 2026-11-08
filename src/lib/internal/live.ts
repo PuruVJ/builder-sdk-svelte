@@ -59,6 +59,10 @@ export function reconcile<T>(prev: unknown, next: T): T {
 	}
 }
 
+/**
+ * A new array or object is made only where a part differs: untouched subtrees allocate nothing.
+ * @heisenbench linear in next
+ */
 function share(prev: unknown, next: unknown, depth: number): unknown {
 	if (prev === next) return next;
 	if (typeof next !== 'object' || next === null || typeof prev !== 'object' || prev === null) return next;
@@ -70,7 +74,7 @@ function share(prev: unknown, next: unknown, depth: number): unknown {
 		// Each old item is matched at most once: two new blocks with the same id (duplicated content)
 		// must never become the same object — one list would then hold one object twice.
 		let used: Set<unknown> | undefined;
-		const out = new Array(next.length);
+		let out: unknown[] | undefined;
 		for (let i = 0; i < next.length; i++) {
 			const n = next[i];
 			let p: unknown = prev[i];
@@ -93,10 +97,13 @@ function share(prev: unknown, next: unknown, depth: number): unknown {
 				else (used ??= new Set()).add(p);
 			}
 			const r = share(p, n, depth + 1);
-			out[i] = r;
-			if (r !== prev[i]) same = false;
+			if (out) out.push(r);
+			else if (!same || r !== prev[i]) {
+				out = prev.slice(0, i);
+				out.push(r);
+			}
 		}
-		return same ? prev : out;
+		return out ?? (same ? prev : []);
 	}
 	if (Array.isArray(prev) || !is_plain(next) || !is_plain(prev)) return next;
 	const a = prev as Record<string, unknown>;
@@ -104,16 +111,24 @@ function share(prev: unknown, next: unknown, depth: number): unknown {
 	const keys = Object.keys(b);
 	const prev_keys = Object.keys(a);
 	// (key ORDER too: properties become attributes, in order)
-	let same = keys.length === prev_keys.length;
-	const out: Record<string, unknown> = {};
+	const same = keys.length === prev_keys.length;
+	let out: Record<string, unknown> | undefined;
 	for (let i = 0; i < keys.length; i++) {
 		const k = keys[i];
 		const r = share(Object.prototype.hasOwnProperty.call(a, k) ? a[k] : undefined, b[k], depth + 1);
-		if (k === '__proto__') Object.defineProperty(out, k, { value: r, enumerable: true, writable: true, configurable: true });
-		else out[k] = r;
-		if (same && (prev_keys[i] !== k || r !== a[k])) same = false;
+		if (!out) {
+			if (same && prev_keys[i] === k && r === a[k]) continue;
+			out = {};
+			for (let j = 0; j < i; j++) put(out, keys[j], a[keys[j]]);
+		}
+		put(out, k, r);
 	}
-	return same ? prev : out;
+	return out ?? (same ? prev : {});
+}
+
+function put(out: Record<string, unknown>, k: string, v: unknown): void {
+	if (k === '__proto__') Object.defineProperty(out, k, { value: v, enumerable: true, writable: true, configurable: true });
+	else out[k] = v;
 }
 
 /**
