@@ -392,6 +392,29 @@ pnpm e2e:build                 # the SvelteKit e2e app, built once per SDK
 pnpm bench:client pages__landing.pageContent gen__page-1m   # browser hydration, 1× and 4× CPU
 ```
 
+### Counting work (for PRs)
+
+The timings above say how fast a render is; they move with the machine. [Heisenbench](https://github.com/ogygiajs/bench/tree/main/packages/heisenbench)
+counts the work instead: steps per function and per line, the same on every run, so one run of a PR
+and one of its base tell which line got slower. It needs Node 26.4+ (the library itself does not).
+
+```sh
+pnpm fixtures && pnpm bench:build
+pnpm bench:count    # bench/count/*.bench.ts → bench/results/heisenbench/report.json
+pnpm bench:growth   # the same cases at 1×, 10×, 100× the page: linear, n log n, quadratic…
+pnpm exec heisenbench diff base.json head.json --repo .   # two reports → the markdown of the PR comment
+```
+
+- `ssr.bench.ts`: one server render of 14 fixtures (the size ladder's small end, the shapes, every
+  feature path), the same content rendered again (a cached plan), and the official SDKs on two of them.
+- `app-page.bench.ts`: a whole field request, as `bench:app` renders it.
+- `live.bench.ts`: one editor keystroke's data work (merge the update, reconcile it with the page).
+- `client.bench.ts`: hydrating server HTML, mounting, and a new content on a mounted page, with
+  `.svelte` compiled for the browser, on happy-dom (the DOM's own work is not counted).
+
+Every PR gets the change as one comment (`.github/workflows/heisenbench.yml`). Steps are not time:
+use them to find what changed and where, and the timed benches for how much it costs.
+
 ### Official e2e suite
 
 ```sh
