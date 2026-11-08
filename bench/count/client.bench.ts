@@ -4,7 +4,8 @@
  * scratch, and a new content handed to a mounted page (a client navigation). The editor's live
  * re-render (preview or editing mode, coalesced per frame) is not here: its data side is
  * bench/count/live.bench.ts, its re-render tests/editor-perf.test.ts (Chromium).
- *   node bench/count/client.ts   (the client run of `pnpm bench:count`)
+ *   heisenbench run bench/count/client.bench.ts --svelte client --conditions svelte --import bench/count/dom.ts
+ *   (the client run of `pnpm bench:count`)
  * The hydration markup is the server render of bench/dist (`pnpm bench:build`).
  */
 import { bench } from 'heisenbench/bench';
