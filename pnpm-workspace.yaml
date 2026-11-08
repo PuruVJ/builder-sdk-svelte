@@ -5,3 +5,5 @@ packages:
 allowBuilds:
   esbuild: true
   isolated-vm: false
+minimumReleaseAgeExclude:
+  - heisenbench@0.1.0

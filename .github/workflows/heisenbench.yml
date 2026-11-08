@@ -45,13 +45,16 @@ jobs:
           node bench/count/run.ts --out-dir "$out/head" || true
           # growth: the cases with a `scale`, at 1x, 10x, 100x the page (pnpm bench:growth)
           pnpm bench:growth --out "$out/head/report.json" || true
-          if git cat-file -e "$base:bench/count/run.ts" 2> /dev/null; then
-            # the base has counted benches of its own: count it in its own checkout
+          version() { node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).devDependencies?.heisenbench'; }
+          if git cat-file -e "$base:bench/count/run.ts" 2> /dev/null &&
+            [ "$(git show "$base:package.json" | version)" = "$(version < package.json)" ]; then
+            # the base has counted benches of its own and the same Heisenbench: count it in its own checkout
             git worktree add -q "$RUNNER_TEMP/base" "$base"
             (cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile && pnpm fixtures > /dev/null && pnpm bench:build &&
               node bench/count/run.ts --out-dir "$out/base" && pnpm bench:growth --out "$out/base/report.json") || true
           else
-            # the first PR: this PR's bench files on the base's code
+            # the first PR, or another Heisenbench on the base (its reports and flags can differ):
+            # this PR's Heisenbench and bench files on the base's code
             node bench/count/run.ts --source-from "$base" --out-dir "$out/base" || true
           fi
           pnpm exec heisenbench diff "$out/base/report.json" "$out/head/report.json" --repo "$GITHUB_WORKSPACE" \
